@@ -5,6 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Movie Club</title>
 <meta name="description" content="Private movie clubs: take turns picking films, then rate and review them together.">
+<!-- Link previews (iMessage, Discord, WhatsApp...) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Movie Club">
+<meta property="og:title" content="Movie Club">
+<meta property="og:description" content="Take turns picking. Rate it together. Private clubs for movie nights with friends.">
+<meta property="og:url" content="https://movieclub.bravepop.app/">
+<meta property="og:image" content="https://movieclub.bravepop.app/img/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Movie Club: take turns picking, rate it together">
+<meta name="twitter:card" content="summary_large_image">
+<!-- Install as an app -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta name="theme-color" content="#1c1d20">
+<meta name="apple-mobile-web-app-title" content="Movie Club">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EM%3C/text%3E%3C/svg%3E">
 <script>
   // Apply the saved palette before the page paints, so it never flashes the default.
@@ -23,7 +42,12 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap">
+<link rel="preconnect" href="https://pbgedfapgvmvyzsdblab.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://image.tmdb.org">
+<!-- Fonts load without holding up the first paint; text shows in a fallback font for a moment. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap"></noscript>
 <style>
 /* Layout: a cinema lobby. Marquee header, a "your turn" bar for the logged-in member, then pinned tabs:
    Next up (ticket, latest takes) · Schedule (program, pick order) · Ratings (watched table, grid) · Critics. */
@@ -580,6 +604,32 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
 .acct-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .rcode { font-family: var(--font-mono); font-size: clamp(16px, 4.6vw, 22px); letter-spacing: .06em; text-align: center; padding: 14px 10px; border-radius: 8px; background: var(--bg); border: 1px dashed var(--accent); user-select: all; overflow-wrap: anywhere; }
 
+/* Setup checklist (admins of new clubs) */
+.setup { border-color: var(--accent); }
+.setup ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.setup li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.setup .tick { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); font-size: 13px; flex: none; }
+.setup li.done .tick { background: var(--good); border-color: var(--good); color: var(--bg); }
+.setup li.done .step { color: var(--muted); text-decoration: line-through; }
+.setup .box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+
+/* Club records */
+.records { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.record { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+.record.no-poster { grid-template-columns: minmax(0, 1fr); }
+.record .poster { width: 44px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; grid-row: span 3; }
+.record .k { font-family: var(--font-body); font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; color: var(--muted); }
+.record .t { font-weight: 700; overflow-wrap: anywhere; }
+.record .v { font-size: 13px; color: var(--muted); }
+
+/* Discussion under a watched film */
+.discussion { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.comments li { display: grid; gap: 2px; }
+.comments .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; }
+.comments .head .when { color: var(--muted); }
+.comments p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
 /* Club settings (admins) */
 #club-admin { width: min(640px, calc(100vw - 32px)); }
 .adm-section { display: grid; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--line); }
@@ -632,6 +682,7 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
 
   <div id="content" hidden>
     <div class="panel" role="tabpanel" id="panel-next" aria-labelledby="tab-next">
+      <div class="box setup" id="setup" hidden></div>
       <section aria-labelledby="next-h">
         <div class="section-head"><h2 id="next-h">Next screening</h2></div>
         <article class="ticket" id="ticket"></article>
@@ -730,6 +781,13 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
     </div>
 
     <div class="panel" role="tabpanel" id="panel-critics" aria-labelledby="tab-critics" hidden>
+      <section aria-labelledby="rec-h" id="records-section" hidden>
+        <div class="section-head">
+          <h2 id="rec-h">Club records</h2>
+          <div class="seg" role="group" aria-label="Which year" id="records-year" hidden></div>
+        </div>
+        <ul class="records" id="records"></ul>
+      </section>
       <section aria-labelledby="mem-h">
         <div class="section-head">
           <h2 id="mem-h">The critics</h2>
@@ -1005,6 +1063,9 @@ let canVote = false;                  // database has the review_votes table
 let watchlist = [];                   // your own watchlist, newest first (private to you)
 let canWatchlist = false;             // database has the watchlist table
 let votes = new Map();                // "slot|author" -> {up, down, mine}
+let canComment = false;               // database has the comments table
+const commentDrafts = {};             // unsent comment text, by film date
+let recordsYear = "all";              // Club records: "all" or a year like "2026"
 let takesSort = "newest";             // newest | top
 let stickers = [];                    // [{id, path, tab, x, y, w, z, added_by}]
 let party = false;                    // this viewer's party mode switch (saved per browser)
@@ -1017,13 +1078,14 @@ const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) =>
 
 /* ---------- data ---------- */
 async function load() {
-  const [m, s, r, a, st, rv] = await Promise.all([
+  const [m, s, r, a, st, rv, cm] = await Promise.all([
     sb.from("members").select("name, pick_order, role, user_id, created_at").eq("club_id", club.id).order("pick_order", { nullsFirst: false }).order("name"),
     sb.from("slots").select("*").eq("club_id", club.id).order("date"),
     sb.from("ratings").select("*").eq("club_id", club.id),
     sb.from("absences").select("*").eq("club_id", club.id),
     sb.from("stickers").select("*").eq("club_id", club.id).order("z"),
-    sb.from("review_votes").select("slot, author, voter, value").eq("club_id", club.id)
+    sb.from("review_votes").select("slot, author, voter, value").eq("club_id", club.id),
+    sb.from("comments").select("id, slot, member, body, created_at").eq("club_id", club.id).order("created_at")
   ]);
   const err = m.error || s.error || r.error;
   if (err) throw err;
@@ -1043,7 +1105,9 @@ async function load() {
   me = members.find(x => session && x.user_id === session.user.id)?.name || null;
   canPoster = s.data.length > 0 && "poster" in s.data[0];
   canReview = r.data.length > 0 && "review" in r.data[0];
-  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {}, missed: new Set() }]));
+  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {}, missed: new Set(), comments: [] }]));
+  canComment = !cm.error; // the comments table may not exist yet
+  (cm.data || []).forEach(x => byDate.get(x.slot)?.comments.push(x));
   (a.data || []).forEach(x => byDate.get(x.slot)?.missed.add(x.member));
   r.data.forEach(x => {
     const sl = byDate.get(x.slot); if (!sl) return;
@@ -1143,7 +1207,7 @@ function renderAccount() {
 function render() {
   // Keep a half-typed review and its cursor through live refreshes.
   const active = document.activeElement;
-  const keep = active && active.dataset && active.dataset.review ? { id: active.id, pos: active.selectionStart } : null;
+  const keep = active && active.dataset && (active.dataset.review || active.dataset.comment) ? { id: active.id, pos: active.selectionStart } : null;
 
   renderAccount();
   if (!slots) return;
@@ -1155,9 +1219,9 @@ function render() {
   }
   $("status").hidden = true; $("content").hidden = false;
   const D = derive();
-  renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D);
+  renderTagline(D); renderSetup(D); renderTurn(D); renderTicket(D); renderTakes(D);
   $("sched-note").textContent = club.schedule_note || "Picks rotate in the pick order below.";
-  renderSchedule(D); renderWatchlist(); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
+  renderSchedule(D); renderWatchlist(); renderOrder(D); renderWatched(D); renderGrid(D); renderRecords(D); renderMembers(D);
   renderParty();
 
   if (popFor && !popFor.isConnected) hidePop();
@@ -1223,6 +1287,7 @@ function renderTicket({ next }) {
         ${me ? `<div class="actions">
           ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
           <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${next.title ? "Edit" : "Add the film"}</button>
+          <button class="btn small" type="button" data-act="ics" data-id="${next.date}">Add to calendar</button>
         </div>` : ""}
     </div>
     <div class="stub">
@@ -1311,7 +1376,7 @@ function renderSchedule({ upcoming }) {
   const mine = upcoming.filter(f => isPicker(f, me));
   $("sched-controls").hidden = !me;
   $("sched-filter").querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", b.dataset.filter === (mineOnly ? "mine" : "all") ? "true" : "false"));
-  $("sched-count").textContent = mineOnly ? `${plural(mine.length, "pick")} coming up · ${mine.filter(f => !f.title).length} still to choose` : "";
+  $("sched-count").innerHTML = mineOnly ? `${plural(mine.length, "pick")} coming up · ${mine.filter(f => !f.title).length} still to choose${mine.length ? ` <button class="link-btn" type="button" data-act="ics-mine">Add them to your calendar</button>` : ""}` : "";
   const list = mineOnly ? mine : showAll ? upcoming : upcoming.slice(0, SHOWN);
   if (mineOnly && !list.length) {
     $("schedule").innerHTML = `<li class="muted">You don't have any upcoming picks on the calendar.</li>`;
@@ -1417,7 +1482,7 @@ function renderWatched({ C, watched }) {
         <span>
           <span class="t">${esc(f.title)}</span>
           <span class="meta">${meta}</span>
-          <span class="more">${open ? "Hide details" : nReviews ? `${plural(nReviews, "review")} · show details` : "Show details"}</span>
+          <span class="more">${open ? "Hide details" : [nReviews ? plural(nReviews, "review") : "", f.comments.length ? plural(f.comments.length, "comment") : "", nReviews || f.comments.length ? "show details" : "Show details"].filter(Boolean).join(" · ")}</span>
         </span>
       </button>
       ${meter}
@@ -1461,7 +1526,26 @@ function renderDetail(f, C) {
   }
   const links = [f.director ? `Directed by ${esc(f.director)}` : "", esc(f.genre || ""),
     f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">IMDb ↗</a>` : ""].filter(Boolean).join(" · ");
-  return `${links ? `<p class="links">${links}</p>` : ""}${list}${missedLine}${form}${attend}`;
+  return `${links ? `<p class="links">${links}</p>` : ""}${list}${missedLine}${form}${attend}${discussion(f)}`;
+}
+
+// Comments under a watched film. Your own (or, for admins, anyone's) can be deleted.
+function discussion(f) {
+  if (!canComment) return "";
+  const list = f.comments.length
+    ? `<ul class="comments">${f.comments.map(c => `
+        <li>
+          <div class="head"><b>${esc(c.member)}</b><span class="when">${fmtTs(c.created_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+            ${me && (c.member === me || isAdmin()) ? `<button class="link-btn" type="button" data-comment-del="${c.id}">Delete</button>` : ""}</div>
+          <p>${esc(c.body)}</p>
+        </li>`).join("")}</ul>`
+    : `<p class="muted" style="margin:0;font-size:14px">No comments yet.</p>`;
+  const form = me ? `
+    <div class="review-form">
+      <input id="comment-${f.date}" data-comment="${f.date}" maxlength="500" placeholder="Add to the discussion" value="${esc(commentDrafts[f.date] || "")}" aria-label="Comment on ${esc(f.title)}">
+      <button class="btn small" type="button" data-act="comment" data-id="${f.date}">Post</button>
+    </div>` : "";
+  return `<div class="discussion"><span class="label">Discussion</span>${list}${form}</div>`;
 }
 
 // Rating colors (SeriesGraph style): [background, text, label]. Same in every palette.
@@ -1625,6 +1709,105 @@ function renderMembers({ C, watched }) {
         ${c.latest ? `<blockquote>“${esc(c.latest.text)}”<cite>on ${esc(c.latest.f.title)}</cite></blockquote>` : ""}
       </article>`;
   }).join("");
+}
+
+/* ---------- setup checklist (admins of a new club) ---------- */
+function renderSetup({ upcoming, next }) {
+  const box = $("setup");
+  let hidden = false;
+  try { hidden = localStorage.getItem(`mc-setup-hidden-${club.id}`) === "1"; } catch (e) {}
+  if (!isAdmin() || hidden) { box.hidden = true; return; }
+  const open = upcoming.filter(s => !s.title);
+  const steps = [
+    { done: members.filter(m => m.user_id).length > 1, text: "Invite people", hint: "Copy the invite link from Club settings and send it to the group.", act: "setup-admin", btn: "Open Club settings" },
+    { done: pickOrder().length > 1, text: "Set the pick order", hint: "Put everyone in the order they'll take turns.", act: "setup-admin", btn: "Open Club settings" },
+    { done: pickOrder().length <= 1 || open.length <= 1 || new Set(open.map(s => s.picker)).size > 1, text: "Hand out the dates", hint: "Re-deal open dates so each date goes to the next person in the pick order.", act: "setup-admin", btn: "Open Club settings" },
+    { done: !!next?.title, text: "Add the first film", hint: "", act: "setup-edit", btn: "Add the film" }
+  ];
+  if (steps.every(x => x.done)) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="box-head"><h3>Get your club going</h3><button class="link-btn" type="button" data-act="setup-hide">Hide this</button></div>
+    <ol>${steps.map(x => `
+      <li class="${x.done ? "done" : ""}">
+        <span class="tick" aria-hidden="true">${x.done ? "✓" : ""}</span>
+        <span class="step">${x.text}${x.done ? " (done)" : ""}</span>
+        ${x.done ? "" : `${x.hint ? `<span class="muted" style="font-size:13px">${x.hint}</span>` : ""}<button class="btn small" type="button" data-act="${x.act}">${x.btn}</button>`}
+      </li>`).join("")}</ol>`;
+}
+
+/* ---------- club records ---------- */
+const sd = a => { const m = mean(a); return Math.sqrt(mean(a.map(x => (x - m) ** 2))); };
+function renderRecords({ watched }) {
+  const years = [...new Set(watched.map(f => f.date.slice(0, 4)))].sort();
+  if (recordsYear !== "all" && !years.includes(recordsYear)) recordsYear = "all";
+  $("records-year").hidden = years.length < 2;
+  $("records-year").innerHTML = ["all", ...years].map(y => `<button type="button" data-year="${y}" aria-pressed="${y === recordsYear}">${y === "all" ? "All time" : y}</button>`).join("");
+  const films = watched.filter(f => recordsYear === "all" || f.date.startsWith(recordsYear));
+  const scored = films.filter(f => f.avg != null && f.vals.filter(Boolean).length >= 2);
+  const spread = films.map(f => ({ f, v: f.vals.filter(Boolean) })).filter(x => x.v.length >= 3).map(x => ({ ...x, sd: sd(x.v) }));
+  const best = (list, key) => list.length ? list.reduce((a, b) => (key(b) > key(a) ? b : a)) : null;
+  const recs = [];
+  const film = (k, f, v) => f && recs.push({ k, f, t: f.title, v });
+  film("Highest rated", best(scored, f => f.avg), null);
+  film("Lowest rated", best(scored, f => -f.avg), null);
+  const div = best(spread, x => x.sd);
+  if (div && div.sd > 0) film("Most divisive", div.f, `ratings from ${Math.min(...div.v)}★ to ${Math.max(...div.v)}★`);
+  const agreed = best(spread.filter(x => x !== div), x => -x.sd + x.v.length / 100);
+  if (agreed) film("Most agreed on", agreed.f, agreed.sd === 0 ? `everyone gave it ${agreed.v[0]}★` : `ratings within ${Math.max(...agreed.v) - Math.min(...agreed.v)}★`);
+  const timed = films.filter(f => f.mins);
+  film("Longest", best(timed, f => f.mins), null);
+  // People: whose picks the club liked most, and who reviews the most.
+  const C = critics();
+  const pickers = C.map(n => ({ n, picks: films.filter(f => isPicker(f, n) && f.avg != null) })).filter(x => x.picks.length >= 2);
+  const lp = best(pickers, x => mean(x.picks.map(f => f.avg)));
+  if (lp) recs.push({ k: "Best-loved picker", t: lp.n, v: `club gave their ${lp.picks.length} picks ${mean(lp.picks.map(f => f.avg)).toFixed(2)} on average` });
+  const reviewers = C.map(n => ({ n, c: films.filter(f => f.reviews[n]).length })).filter(x => x.c > 0);
+  const rv = best(reviewers, x => x.c);
+  if (rv) recs.push({ k: "Most reviews", t: rv.n, v: plural(rv.c, "review") });
+  // Genres: the club's favorite (at least 2 films) and the one watched most.
+  const g = {};
+  films.forEach(f => (f.genre || "").split(/\s*,\s*/).filter(Boolean).forEach(x => (g[x] = g[x] || []).push(f)));
+  const genres = Object.entries(g).map(([k, fs]) => ({ k, n: fs.length, avg: mean(fs.filter(f => f.avg != null).map(f => f.avg)) }));
+  const fg = best(genres.filter(x => x.n >= 2 && x.avg != null), x => x.avg);
+  if (fg) recs.push({ k: "Favorite genre", t: fg.k, v: `${fg.avg.toFixed(2)} over ${plural(fg.n, "film")}` });
+  const mg = best(genres, x => x.n + (x.avg || 0) / 10);
+  if (mg && mg !== fg) recs.push({ k: "Most watched genre", t: mg.k, v: plural(mg.n, "film") });
+  const mins = films.reduce((a, f) => a + (f.mins || 0), 0);
+  if (films.length) recs.push({ k: recordsYear === "all" ? "All told" : `In ${recordsYear}`, t: `${plural(films.length, "film")}`, v: `${Math.floor(mins / 60)}h ${mins % 60}m of screen time` });
+
+  $("records-section").hidden = !recs.length;
+  $("records").innerHTML = recs.map(r => {
+    const v = r.v ?? (r.f ? [r.f.avg != null ? `club ${r.f.avg.toFixed(1)}` : "", r.k === "Longest" ? runtime(r.f.mins) : "", `${r.f.picker}'s pick`].filter(Boolean).join(" · ") : "");
+    const poster = r.f && hasPoster(r.f) ? posterImg(r.f) : "";
+    return `<li class="record ${poster ? "" : "no-poster"}">${poster}<span class="k">${esc(r.k)}</span><span class="t">${esc(r.t)}</span><span class="v">${esc(v)}</span></li>`;
+  }).join("");
+}
+$("records-year").addEventListener("click", e => { const b = e.target.closest("[data-year]"); if (b) { recordsYear = b.dataset.year; render(); } });
+
+/* ---------- add to calendar ---------- */
+// An all-day calendar event per screening. The id stays the same for a club's date, so
+// importing again updates the event instead of adding a second one (in most calendar apps).
+const icsText = t => String(t).replace(/[\\;,]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
+const icsFold = line => line.length <= 74 ? line : line.match(/.{1,74}/g).join("\r\n ");
+function icsEvent(x) {
+  const day = x.date.replace(/-/g, ""), after = addDays(x.date, 1).replace(/-/g, "");
+  const link = `${location.origin}${location.pathname}?c=${encodeURIComponent(club.slug)}`;
+  const what = x.title ? `${x.title} (${x.picker}'s pick)` : `${x.picker}'s pick`;
+  const details = [x.title ? `${x.picker}'s pick` : "Pick not in yet", x.director ? `Directed by ${x.director}` : "", x.mins ? runtime(x.mins) : "", link].filter(Boolean).join("\n");
+  return ["BEGIN:VEVENT", `UID:${club.id}-${day}@movieclub.bravepop.app`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+    `DTSTART;VALUE=DATE:${day}`, `DTEND;VALUE=DATE:${after}`, `SUMMARY:${icsText(`${club.name}: ${what}`)}`,
+    `DESCRIPTION:${icsText(details)}`, `URL:${link}`, "END:VEVENT"].map(icsFold).join("\r\n");
+}
+function downloadIcs(list, name) {
+  if (!list.length) return;
+  const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Bravepop//Movie Club//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", ...list.map(icsEvent), "END:VCALENDAR"].join("\r\n") + "\r\n";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([body], { type: "text/calendar;charset=utf-8" }));
+  a.download = `${name.replace(/[^\w -]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "screening"}.ics`;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast(list.length > 1 ? `Saved ${plural(list.length, "screening")}. Open the file to add them to your calendar.` : "Saved. Open the file to add it to your calendar.");
 }
 
 /* ---------- party mode ---------- */
@@ -2214,10 +2397,15 @@ $("critics-sort").addEventListener("click", e => {
   criticsSort = b.dataset.sort;
   render();
 });
-document.addEventListener("input", e => { const d = e.target.dataset && e.target.dataset.review; if (d) drafts[d] = e.target.value; });
+document.addEventListener("input", e => {
+  const d = e.target.dataset && e.target.dataset.review; if (d) drafts[d] = e.target.value;
+  const c = e.target.dataset && e.target.dataset.comment; if (c) commentDrafts[c] = e.target.value;
+});
 document.addEventListener("keydown", e => {
   const d = e.target.dataset && e.target.dataset.review;
   if (d && e.key === "Enter") { e.preventDefault(); saveReview(d); }
+  const c = e.target.dataset && e.target.dataset.comment;
+  if (c && e.key === "Enter") { e.preventDefault(); postComment(c); }
 });
 
 function gotoFilm(date) {
@@ -2230,6 +2418,19 @@ function gotoFilm(date) {
     row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash");
   }
 }
+
+function postComment(date) {
+  const input = $("comment-" + date);
+  const body = (input ? input.value : commentDrafts[date] || "").trim();
+  if (!body) return;
+  write(() => sb.from("comments").insert({ club_id: club.id, slot: date, member: me, body }), "Comment posted")
+    .then(ok => { if (ok) { delete commentDrafts[date]; const el = $("comment-" + date); if (el) el.value = ""; } });
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-comment-del]"); if (!b) return;
+  if (!confirm("Delete this comment?")) return;
+  write(() => sb.from("comments").delete().eq("club_id", club.id).eq("id", +b.dataset.commentDel), "Comment deleted");
+});
 
 function saveReview(date) {
   const slot = slots.find(s => s.date === date); if (!slot) return;
@@ -2245,6 +2446,10 @@ document.addEventListener("click", e => {
   if (!b || !slots) return;
   const act = b.dataset.act;
   if (act === "goto-tab") return setTab(b.dataset.id);
+  if (act === "ics-mine") return downloadIcs(slots.filter(s => !s.watched && isPicker(s, me)).sort((a, b) => a.date.localeCompare(b.date)), "my-picks");
+  if (act === "setup-admin") return openClubAdmin();
+  if (act === "setup-edit") { const n = nextUp(); return n ? openEditor(n) : null; }
+  if (act === "setup-hide") { try { localStorage.setItem(`mc-setup-hidden-${club.id}`, "1"); } catch (err) {} return render(); }
   const slot = slots.find(s => s.date === b.dataset.id);
   if (!slot) return;
   if (act === "goto") return gotoFilm(slot.date);
@@ -2254,6 +2459,8 @@ document.addEventListener("click", e => {
   }
   if (act === "edit") return me ? openEditor(slot) : signIn();
   if (act === "review") return saveReview(slot.date);
+  if (act === "comment") return postComment(slot.date);
+  if (act === "ics") return downloadIcs([slot], slot.title ? slot.title : "screening");
   if (act === "missed") {
     const was = slot.missed.has(me);
     write(() => was
@@ -3179,7 +3386,7 @@ async function openClub() {
   backfillPosters();
   const filter = `club_id=eq.${club.id}`;
   const ch = sb.channel(`club-${club.id}`);
-  ["members", "slots", "ratings", "absences", "stickers", "review_votes"].forEach(table =>
+  ["members", "slots", "ratings", "absences", "stickers", "review_votes", "comments"].forEach(table =>
     ch.on("postgres_changes", { event: "*", schema: "public", table, filter }, scheduleReload));
   ch.on("postgres_changes", { event: "*", schema: "public", table: "clubs", filter: `id=eq.${club.id}` }, refreshClub);
   ch.subscribe();
@@ -3188,6 +3395,8 @@ async function openClub() {
 }
 
 /* ---------- boot ---------- */
+// Install as an app / open offline. Not on localhost, so local testing always gets fresh files.
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 (async () => {
   if (!window.supabase || !CFG.supabaseUrl || CFG.supabaseUrl.startsWith("PASTE")) {
     return showStatus("The database isn't connected yet.", "Add the Supabase project URL and key to config.js.");
