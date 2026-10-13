@@ -6,5 +6,5 @@ window.MOVIE_CLUB = {
   supabaseAnonKey: "sb_publishable_m8bxU98WLs9Ax2hOMxDT2A_Mqu7F57G",
   // TMDB (themoviedb.org) API key: film search, posters and details. Read-only, safe to publish.
   // Leave empty to turn film search off (people can still type film details in by hand).
-  tmdbApiKey: ""
+  tmdbApiKey: "f84c4efd94e03e49e63b5d0032557466"
 };
