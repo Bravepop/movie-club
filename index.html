@@ -245,6 +245,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 .slot .film.tba { color: var(--muted); font-weight: 500; font-style: italic; }
 .slot .who { font-size: 13px; color: var(--muted); }
 .slot .edit { margin-top: 2px; }
+.slot .slot-acts { display: flex; flex-wrap: wrap; gap: 2px 14px; }
 .slot .poster { width: 60px; }
 
 /* Tables */
@@ -1326,7 +1327,10 @@ function renderSchedule({ upcoming }) {
   $("soon-list").innerHTML = soon.map(f => slotCard(f, false)).join("");
 }
 
+// The next screening: the earliest one not yet watched.
+const nextUp = () => slots.filter(s => !s.watched).sort((a, b) => a.date.localeCompare(b.date))[0] || null;
 function slotCard(f, isNext) {
+  const swappable = me && !isNext && nextUp() && f.date !== nextUp().date;
   return `
     <li class="slot ${isPicker(f, me) ? "mine" : ""} ${isNext ? "is-next" : ""}">
       <div class="date"><div class="m">${fmt(f.date, { month: "short" })}</div><div class="d">${fmt(f.date, { day: "numeric" })}</div></div>
@@ -1336,7 +1340,7 @@ function slotCard(f, isNext) {
           ? `<div class="film">${f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title)}</div>`
           : `<div class="film tba">Pick not in yet</div>`}
         <div class="who">${fmt(f.date, { weekday: "short" })} · ${esc(f.picker)}'s pick${f.mins ? ` · <span class="num">${runtime(f.mins)}</span>` : ""}</div>
-        ${me ? `<button class="link-btn edit" type="button" data-act="edit" data-id="${f.date}">${f.title ? "Edit" : "Add film"}</button>` : ""}
+        ${me ? `<span class="slot-acts"><button class="link-btn edit" type="button" data-act="edit" data-id="${f.date}">${f.title ? "Edit" : "Add film"}</button>${swappable ? `<button class="link-btn edit" type="button" data-act="swap-next" data-id="${f.date}" title="Swap this screening with the next one">Watch this one next</button>` : ""}</span>` : ""}
       </div>
       <div>${posterImg(f)}</div>
     </li>`;
@@ -2264,7 +2268,22 @@ document.addEventListener("click", e => {
     return;
   }
   if (act === "unwatch") return unwatch(slot);
+  if (act === "swap-next") return swapWithNext(slot);
 });
+
+// "Watch this one next": this screening's film and picker trade places with the next screening's.
+// Nobody loses a turn: the next screening's picker moves to this date instead.
+function swapWithNext(slot) {
+  const next = nextUp();
+  if (!next || next.date === slot.date) return;
+  const day = d => fmt(d, { weekday: "short", month: "short", day: "numeric" });
+  const swap = () => sb.rpc("swap_screenings", { c: club.id, a: next.date, b: slot.date });
+  write(swap).then(ok => {
+    if (!ok) return;
+    toast(`${slot.picker}'s pick is next (${day(next.date)}). ${next.picker}'s moves to ${day(slot.date)}.`, { label: "Undo", run: () => write(swap, "Swapped back") });
+    setTab("next");
+  });
+}
 
 // Put a film marked watched by mistake back in the Next up spot. Its ratings are kept.
 function unwatch(slot) {

@@ -325,6 +325,27 @@ begin
 end;
 $$;
 
+/* ---------------------------------------------------------------- swapping screenings */
+
+-- "Watch this one next": swap the films (and pickers) of two upcoming screenings.
+-- Any member can do it, like editing a screening. Only screenings not yet watched, so ratings
+-- never move. The dates stay put; what's scheduled on them trades places.
+create function public.swap_screenings(c uuid, a date, b date) returns void
+language plpgsql security definer set search_path = public as $$
+declare x slots; y slots;
+begin
+  if not is_member(c) then raise exception 'Only club members can do that.' using errcode = '42501'; end if;
+  select * into x from slots where club_id = c and date = a;
+  select * into y from slots where club_id = c and date = b;
+  if x.date is null or y.date is null then raise exception 'One of those screenings is gone. Refresh and try again.' using errcode = 'P0001'; end if;
+  if x.watched or y.watched then raise exception 'Only upcoming screenings can be swapped.' using errcode = 'P0001'; end if;
+  update slots set title = y.title, director = y.director, genre = y.genre, mins = y.mins, imdb = y.imdb, poster = y.poster, picker = y.picker
+  where club_id = c and date = a;
+  update slots set title = x.title, director = x.director, genre = x.genre, mins = x.mins, imdb = x.imdb, poster = x.poster, picker = x.picker
+  where club_id = c and date = b;
+end;
+$$;
+
 /* ---------------------------------------------------------------- admin tools */
 
 create function public.require_admin(c uuid) returns void
@@ -672,6 +693,7 @@ revoke execute on all functions in schema public from public, anon;
 grant execute on function
   public.is_member(uuid), public.is_admin(uuid), public.my_name(uuid), public.party_on(uuid),
   public.create_club(text, text), public.invite_preview(text), public.join_club(text, text), public.leave_club(uuid),
+  public.swap_screenings(uuid, date, date),
   public.admin_update_club(uuid, text, text), public.admin_new_invite(uuid), public.admin_invite_code(uuid),
   public.admin_add_member(uuid, text, boolean), public.admin_rename_member(uuid, text, text),
   public.admin_set_order(uuid, text[]), public.admin_set_role(uuid, text, text),
