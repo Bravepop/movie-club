@@ -570,6 +570,15 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
 .claim legend { margin-bottom: 4px; }
 .field select { appearance: auto; }
 
+/* Username sign-in and recovery codes */
+.signin { display: grid; gap: 12px; }
+.or-rule { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.or-rule::before, .or-rule::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.acct-form { display: grid; gap: 12px; }
+.acct-form .seg { justify-self: start; }
+.acct-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.rcode { font-family: var(--font-mono); font-size: clamp(16px, 4.6vw, 22px); letter-spacing: .06em; text-align: center; padding: 14px 10px; border-radius: 8px; background: var(--bg); border: 1px dashed var(--accent); user-select: all; overflow-wrap: anywhere; }
+
 /* Club settings (admins) */
 #club-admin { width: min(640px, calc(100vw - 32px)); }
 .adm-section { display: grid; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--line); }
@@ -743,6 +752,41 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
   <footer><span id="footer-note">Only members of this club can see it.</span> <a href="privacy.html">Privacy</a> · Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v1</span></footer>
 </main>
 
+<dialog id="recovery" class="narrow" aria-labelledby="recovery-h">
+  <form id="recovery-form" novalidate>
+    <h3 id="recovery-h">Save your recovery code</h3>
+    <p class="muted" style="margin:0">If you forget your password, this code and your username let you set a new one. Nobody else can reset it for you, so keep it somewhere safe, like a password manager or a note on your phone.</p>
+    <div class="rcode" id="recovery-code"></div>
+    <div><button class="btn small" type="button" id="recovery-copy">Copy code</button></div>
+    <label class="check"><input type="checkbox" id="recovery-saved"> I've saved it</label>
+    <div class="dialog-actions">
+      <div class="right"><button type="submit" class="btn primary" id="recovery-go" disabled>Continue</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="passwd" class="narrow" aria-labelledby="passwd-h">
+  <form id="passwd-form" novalidate>
+    <h3 id="passwd-h">Change password</h3>
+    <div class="field">
+      <label for="p-new">New password</label>
+      <input id="p-new" type="password" autocomplete="new-password">
+      <span class="help">At least 8 characters.</span>
+    </div>
+    <div class="field">
+      <label for="p-again">Type it again</label>
+      <input id="p-again" type="password" autocomplete="new-password">
+    </div>
+    <p class="form-error" id="passwd-error" hidden></p>
+    <div class="dialog-actions">
+      <div class="right">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save password</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="club-admin" aria-labelledby="club-admin-h">
   <form id="club-admin-form" novalidate>
     <h3 id="club-admin-h">Club settings</h3>
@@ -807,6 +851,8 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
       <span class="label" style="margin-top:6px">Account</span>
       <div class="custom-share">
         <span class="muted" style="font-size:13px" id="settings-email"></span>
+        <button class="btn small" type="button" id="btn-passwd" hidden>Change password</button>
+        <button class="btn small" type="button" id="btn-new-recovery" hidden>New recovery code</button>
         <button class="btn small" type="button" id="btn-signout">Sign out</button>
         <button class="btn small danger" type="button" id="btn-delete-account">Delete my account</button>
       </div>
@@ -1927,7 +1973,8 @@ const swatchInner = (bg, surface, accent, display) => `<span style="background:$
 function syncSettingsExtras() {
   $("settings-account").hidden = !me;
   $("btn-club-admin").hidden = !isAdmin();
-  $("settings-email").textContent = session?.user?.email ? `Signed in as ${session.user.email}` : "";
+  $("settings-email").textContent = session ? `Signed in as ${accountLabel()}` : "";
+  $("btn-passwd").hidden = $("btn-new-recovery").hidden = !usernameAccount();
   $("runtime-format").querySelectorAll("[data-format]").forEach(b => b.setAttribute("aria-pressed", b.dataset.format === runtimeFormat ? "true" : "false"));
 }
 $("runtime-format").addEventListener("click", e => {
@@ -2225,8 +2272,20 @@ function unwatch(slot) {
 }
 
 /* ---------- sign in ---------- */
+// Username accounts are stored as <username>@users.bravepop.app; no email is ever sent there.
+const USER_DOMAIN = "users.bravepop.app";
+const usernameAccount = () => !!session?.user?.email?.endsWith("@" + USER_DOMAIN);
+const accountLabel = () => usernameAccount() ? session.user.email.split("@")[0] : session?.user?.email || "";
+const cleanUsername = u => u.trim().toLowerCase();
+const USERNAME_OK = /^[a-z0-9_]{3,20}$/;
+
+// Without a session, the sign-in options are on the home screen.
+function signIn() {
+  if (!session) { renderSignedOut(); window.scrollTo({ top: 0 }); }
+}
+
 // Google sign-in. Comes back to this same address (club, invite or home).
-async function signIn() {
+async function signInWithGoogle() {
   const back = location.origin + location.pathname + location.search;
   // select_account: always ask which Google account, so people with several can pick the right one.
   const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: back, queryParams: { prompt: "select_account" } } });
@@ -2572,6 +2631,52 @@ $("editor-clear").addEventListener("click", () => {
   write(() => sb.from("slots").update(data).eq("club_id", club.id).eq("date", date), "Film cleared from that date");
 });
 
+/* ---------- recovery codes and passwords ---------- */
+let afterRecovery = null;
+function showRecoveryCode(code, then) {
+  afterRecovery = then;
+  $("recovery-code").textContent = code;
+  $("recovery-saved").checked = false;
+  $("recovery-go").disabled = true;
+  openDialog($("recovery"));
+}
+$("recovery-saved").addEventListener("change", e => { $("recovery-go").disabled = !e.target.checked; });
+$("recovery-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("recovery-code").textContent); toast("Recovery code copied"); }
+  catch (e) { toast("Select the code and copy it."); }
+});
+$("recovery").addEventListener("cancel", e => e.preventDefault()); // Esc doesn't skip saving it
+$("recovery-form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (!$("recovery-saved").checked) return;
+  closeDialog($("recovery"));
+  const then = afterRecovery; afterRecovery = null;
+  if (then) then();
+});
+$("btn-new-recovery").addEventListener("click", async () => {
+  if (!confirm("Make a new recovery code? Your current one stops working.")) return;
+  const { data, error } = await sb.rpc("make_recovery_code");
+  if (error) { toast("Couldn't make a new code. Try again."); return; }
+  closeDialog($("settings"));
+  showRecoveryCode(data, () => toast("New recovery code saved"));
+});
+$("btn-passwd").addEventListener("click", () => {
+  closeDialog($("settings"));
+  $("passwd-form").reset(); $("passwd-error").hidden = true;
+  openDialog($("passwd")); $("p-new").focus();
+});
+$("passwd-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const a = $("p-new").value, b = $("p-again").value, err = $("passwd-error");
+  const fail = m => { err.textContent = m; err.hidden = false; };
+  if (a.length < 8) return fail("Use at least 8 characters.");
+  if (a !== b) return fail("The two passwords don't match.");
+  const { error } = await sb.auth.updateUser({ password: a });
+  if (error) return fail(/different/i.test(error.message) ? "That's your current password. Pick a new one." : "Couldn't change the password. Try again.");
+  closeDialog($("passwd"));
+  toast("Password changed");
+});
+
 /* ---------- account ---------- */
 async function signOut() {
   await sb.auth.signOut().catch(() => {});
@@ -2620,7 +2725,8 @@ const datesFrom = (start, every, count) => Array.from({ length: every ? count : 
 const REPEATS = `<option value="7">Every week</option><option value="14">Every 2 weeks</option><option value="28">Every 4 weeks</option><option value="0">Just that date</option>`;
 const firstName = () => {
   const m = session?.user?.user_metadata || {};
-  return (m.full_name || m.name || "").trim().split(/\s+/)[0].replace(/&/g, "").slice(0, 30);
+  const n = (m.full_name || m.name || "").trim().split(/\s+/)[0] || (m.username ? m.username[0].toUpperCase() + m.username.slice(1) : "");
+  return n.replace(/&/g, "").slice(0, 30);
 };
 const clubUrl = slug => `${location.pathname}?c=${encodeURIComponent(slug)}`;
 const rpcError = (error, fallback) => (error.code === "P0001" || error.code === "42501") ? error.message : fallback;
@@ -2648,9 +2754,105 @@ function renderSignedOut() {
         <li>Find your taste twin, and who always goes against the room.</li>
       </ul>
       <p>${JOIN_CODE ? "Sign in to see the club and join it." : "Free to use. Clubs are private: only their members can see them."}</p>
-      <div><button class="btn primary" type="button" id="home-signin">Sign in with Google</button></div>
+    </div>
+    <div class="box signin">
+      <div><button class="btn primary" type="button" id="home-signin">Continue with Google</button></div>
+      <div class="or-rule">or use a username</div>
+      <form class="acct-form" id="acct-form" novalidate>
+        <div class="seg" role="group" aria-label="Sign in or create an account" id="acct-mode">
+          <button type="button" data-mode="in" aria-pressed="true">Sign in</button>
+          <button type="button" data-mode="up" aria-pressed="false">Create account</button>
+        </div>
+        <div class="field"><label for="a-user">Username</label><input id="a-user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20"><span class="help" id="a-user-help" hidden>3–20 letters, numbers or _. You sign in with it; your name in each club can be different.</span></div>
+        <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="current-password"></div>
+        <div class="field" id="a-again-field" hidden><label for="a-again">Type the password again</label><input id="a-again" type="password" autocomplete="new-password"></div>
+        <p class="form-error" id="acct-error" hidden></p>
+        <div class="acct-actions">
+          <button class="btn primary" type="submit" id="acct-go">Sign in</button>
+          <button class="link-btn" type="button" id="acct-forgot">Forgot your password?</button>
+        </div>
+      </form>
+      <form class="acct-form" id="reset-form" novalidate hidden>
+        <h3 style="font-size:18px">Set a new password</h3>
+        <p class="help">Use the recovery code you saved when you made your account.</p>
+        <div class="field"><label for="r-user">Username</label><input id="r-user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20"></div>
+        <div class="field"><label for="r-code">Recovery code</label><input id="r-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"></div>
+        <div class="field"><label for="r-pass">New password</label><input id="r-pass" type="password" autocomplete="new-password"><span class="help">At least 8 characters.</span></div>
+        <p class="form-error" id="reset-error" hidden></p>
+        <div class="acct-actions">
+          <button class="btn primary" type="submit" id="reset-go">Set new password</button>
+          <button class="link-btn" type="button" id="reset-back">Back to sign in</button>
+        </div>
+      </form>
     </div>`);
-  $("home-signin").addEventListener("click", signIn);
+  $("home-signin").addEventListener("click", signInWithGoogle);
+  wireAccountForms();
+}
+
+// Username sign-in, account creation and password reset on the signed-out screen.
+function wireAccountForms() {
+  let mode = "in";
+  const err = (id, msg) => { $(id).textContent = msg; $(id).hidden = !msg; };
+  const setMode = m => {
+    mode = m;
+    $("acct-mode").querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m ? "true" : "false"));
+    $("a-again-field").hidden = $("a-user-help").hidden = m === "in";
+    $("acct-forgot").hidden = m === "up";
+    $("a-pass").autocomplete = m === "in" ? "current-password" : "new-password";
+    $("acct-go").textContent = m === "in" ? "Sign in" : "Create account";
+    err("acct-error", "");
+  };
+  $("acct-mode").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
+  const swap = toReset => {
+    $("acct-form").hidden = toReset; $("reset-form").hidden = !toReset;
+    if (toReset) { $("r-user").value = $("a-user").value; $("r-user").focus(); } else $("a-user").focus();
+  };
+  $("acct-forgot").addEventListener("click", () => swap(true));
+  $("reset-back").addEventListener("click", () => swap(false));
+
+  $("acct-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const user = cleanUsername($("a-user").value), pass = $("a-pass").value;
+    if (!USERNAME_OK.test(user)) return err("acct-error", mode === "in" ? "Enter your username." : "Usernames are 3–20 letters, numbers or _.");
+    if (mode === "up" && pass.length < 8) return err("acct-error", "Use at least 8 characters for the password.");
+    if (mode === "up" && pass !== $("a-again").value) return err("acct-error", "The two passwords don't match.");
+    if (!pass) return err("acct-error", "Enter your password.");
+    $("acct-go").disabled = true; err("acct-error", "");
+    const email = `${user}@${USER_DOMAIN}`;
+    if (mode === "in") {
+      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+      $("acct-go").disabled = false;
+      if (error) return err("acct-error", /invalid/i.test(error.message) ? "That username and password don't match." : "Couldn't sign in right now. Try again in a moment.");
+      location.reload();
+      return;
+    }
+    const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { username: user } } });
+    if (error || !data.session) {
+      $("acct-go").disabled = false;
+      if (error && /already/i.test(error.message)) return err("acct-error", "That username is taken. Try another.");
+      if (error && /pwned|weak|leaked/i.test(error.message)) return err("acct-error", "That password is too easy to guess. Pick another.");
+      if (error && /rate|too many/i.test(error.message)) return err("acct-error", "Too many new accounts from here just now. Try again in a few minutes.");
+      return err("acct-error", "Username accounts aren't available right now. Try Google, or try again later.");
+    }
+    session = data.session;
+    const { data: code } = await sb.rpc("make_recovery_code");
+    if (code) showRecoveryCode(code, () => location.reload());
+    else location.reload();
+  });
+
+  $("reset-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const user = cleanUsername($("r-user").value), code = $("r-code").value.trim(), pass = $("r-pass").value;
+    if (!USERNAME_OK.test(user)) return err("reset-error", "Enter your username.");
+    if (!code) return err("reset-error", "Enter your recovery code.");
+    if (pass.length < 8) return err("reset-error", "Use at least 8 characters for the new password.");
+    $("reset-go").disabled = true; err("reset-error", "");
+    const { data, error } = await sb.rpc("reset_password", { username: user, code, new_password: pass });
+    if (error || !data?.ok) { $("reset-go").disabled = false; return err("reset-error", data?.error || "Couldn't reset the password right now. Try again in a moment."); }
+    await sb.auth.signInWithPassword({ email: `${user}@${USER_DOMAIN}`, password: pass });
+    // The old code is used up; this one replaces it.
+    showRecoveryCode(data.code, () => location.reload());
+  });
 }
 
 async function renderMyClubs() {
@@ -2677,7 +2879,7 @@ async function renderMyClubs() {
       <p class="form-error" id="nc-error" hidden></p>
       <div><button class="btn primary" type="submit" id="nc-go">Create the club</button></div>
     </form>
-    <p class="muted home-foot">Signed in as ${esc(session.user.email || "")} · <button class="link-btn" type="button" id="home-delete">Delete my account</button></p>`);
+    <p class="muted home-foot">Signed in as ${esc(accountLabel())} · <button class="link-btn" type="button" id="home-delete">Delete my account</button></p>`);
   $("home-delete").addEventListener("click", deleteAccount);
   $("new-club").addEventListener("submit", async e => {
     e.preventDefault();

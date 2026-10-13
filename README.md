@@ -4,7 +4,7 @@ A free site where anyone can start a private movie club: take turns picking film
 
 - **Site:** `index.html` + `config.js`, a static page served by GitHub Pages.
 - **Data, sign-in and images:** one Supabase project shared by every club. The access rules in `supabase/schema.sql` keep each club visible only to its members.
-- **Sign-in:** Google only, so there are no passwords to reset and no emails to send.
+- **Sign-in:** Google, or a username and password. No emails are ever sent: username accounts get a recovery code at sign-up, and with it people set a new password themselves.
 
 ## How clubs work
 
@@ -28,12 +28,15 @@ Limits that keep the free tiers comfortable: 40 members per club, 20 clubs per p
 4. In Supabase, **Authentication → Sign In / Providers → Google**: turn it on and paste the client ID and secret.
 5. **Authentication → URL Configuration**: set **Site URL** to the site's address (for example `https://movieclub-app.github.io/movie-club/`) and add the same address, plus `http://127.0.0.1:5191/**` for local testing, under **Redirect URLs**.
 
-### 3. Connect the site
+### 3. Username accounts
+**Authentication → Sign In / Providers**: turn **Email** on and **Confirm email** off. Usernames are stored as `<username>@users.bravepop.app`; nothing is sent there.
+
+### 4. Connect the site
 **Project Settings → API Keys**: copy the project URL and the publishable key into `config.js`. Both are meant to be public; the access rules protect the data.
 
 Optional: a free [TMDB](https://www.themoviedb.org/settings/api) API key in `config.js` turns on film search and posters.
 
-### 4. Publish
+### 5. Publish
 Push this folder to a GitHub repo and turn on **Settings → Pages** (deploy from the `main` branch, root folder).
 
 The privacy page lists `movieclub@bravepop.app` as the contact address (forwarded by Cloudflare Email Routing).
