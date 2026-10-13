@@ -1120,7 +1120,7 @@ function renderTagline({ ordered, watched }) {
   const totalMins = watched.reduce((s, f) => s + (f.mins || 0), 0);
   const clubAvg = mean(watched.filter(f => f.avg != null).map(f => f.avg));
   $("tagline").innerHTML = [
-    `<span><b>${pickOrder().length}</b> members</span>`,
+    `<span><b>${pickOrder().length}</b> ${pickOrder().length === 1 ? "member" : "members"}</span>`,
     `<span><b>${watched.length}</b> films watched</span>`,
     `<span><b class="num">${Math.floor(totalMins / 60)}h ${totalMins % 60}m</b>&nbsp; of screen time</span>`,
     clubAvg != null ? `<span>Club average <b class="num">${clubAvg.toFixed(2)}</b></span>` : "",
@@ -2829,6 +2829,10 @@ function renderClubAdmin() {
         <button class="btn small" type="button" data-adm="add-dates">Add dates</button>
       </div>
       <p class="help">Each new date goes to the next person in the pick order. For two screenings a week, add each weekday separately.</p>
+      <div class="inline-row">
+        <button class="btn small" type="button" data-adm="redeal">Re-deal open dates</button>
+        <span class="help" style="flex:1 1 240px">After changing the pick order, this hands every date that doesn't have a film yet back out in turns. Dates with a film keep their picker.</span>
+      </div>
       ${upcoming.length
         ? `<ul class="adm-dates">${upcoming.map(x => `<li><span>${fmt(x.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · ${esc(x.picker)}${x.title ? ` · ${esc(x.title)}` : ""}</span><button class="link-btn" type="button" data-adm="remove-date" data-date="${x.date}">Remove</button></li>`).join("")}</ul>`
         : `<p class="help">No upcoming dates on the calendar.</p>`}
@@ -2845,12 +2849,15 @@ function renderClubAdmin() {
   if (focusId && $(focusId)) $(focusId).focus();
 }
 
-$("club-admin-form").addEventListener("submit", e => {
+$("club-admin-form").addEventListener("submit", e => e.preventDefault());
+// Enter in a box does what its section's button does. (The dialog has no submit button, so
+// the browser wouldn't submit the form on Enter by itself.)
+$("club-admin-body").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const act = { "ca-name": "save-club", "ca-note": "save-club", "ca-add": "add-member", "ca-rename": "rename-save", "ca-count": "add-dates" }[e.target.id];
+  if (!act) return;
   e.preventDefault();
-  // Enter in a box does what its section's button does.
-  const id = document.activeElement?.id;
-  const act = { "ca-name": "save-club", "ca-note": "save-club", "ca-add": "add-member", "ca-rename": "rename-save", "ca-count": "add-dates" }[id];
-  if (act) document.querySelector(`#club-admin-body [data-adm="${act}"]`)?.click();
+  document.querySelector(`#club-admin-body [data-adm="${act}"]`)?.click();
 });
 $("club-admin-body").addEventListener("click", async e => {
   const b = e.target.closest("[data-adm]"); if (!b || b.disabled) return;
@@ -2905,6 +2912,8 @@ $("club-admin-body").addEventListener("click", async e => {
     const count = Math.min(52, Math.max(1, Math.round(+$("ca-count").value) || 1));
     if (!from) return toast("Pick the first date.");
     adminCall("admin_add_dates", { dates: datesFrom(from, every, count) }, n => n ? `Added ${plural(n, "date")}` : "Those dates are already on the calendar");
+  } else if (act === "redeal") {
+    adminCall("admin_redeal", {}, n => n ? `${plural(n, "date")} changed hands` : "Every open date already follows the pick order");
   } else if (act === "remove-date") {
     const d = b.dataset.date, x = slots.find(y => y.date === d);
     if (x?.title && !confirm(`${x.title} is set for ${fmt(d, { month: "long", day: "numeric" })}. Remove the date anyway?`)) return;
