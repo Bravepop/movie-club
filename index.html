@@ -1608,7 +1608,8 @@ function renderMembers({ C, watched }) {
         }).join("")}
       </div>`;
     const rows = [
-      [`vs. the room`, `${fmtD(c.delta)} <small>${c.delta >= 0.05 ? "kinder than average" : c.delta <= -0.05 ? "harsher than average" : "right in step"}</small>`],
+      // Judged on the shown (rounded) number, so "−0.05" never reads as "right in step".
+      [`vs. the room`, `${fmtD(c.delta)} <small>${Math.round(c.delta * 100) >= 5 ? "kinder than average" : Math.round(c.delta * 100) <= -5 ? "harsher than average" : "right in step"}</small>`],
       c.picks.n ? [`Their picks`, `${c.picks.n} film${c.picks.n === 1 ? "" : "s"}${c.picks.avg != null ? ` <small>· club gave them ${c.picks.avg.toFixed(1)}</small>` : ""}`] : null,
       c.twin ? [`Taste twin`, `${esc(c.twin.o)} <small>· ${c.twin.gap.toFixed(1)}★ apart over ${c.twin.n}</small>`] : null,
       c.opposite ? [`Opposite`, `${esc(c.opposite.o)} <small>· ${c.opposite.gap.toFixed(1)}★ apart over ${c.opposite.n}</small>`] : null,
