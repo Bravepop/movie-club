@@ -13,7 +13,7 @@ A free site where anyone can start a private movie club: take turns picking film
 - Admins manage everything from **Club settings** (gear icon): members, pick order, guests, other admins, the invite link, screening dates and deleting the club.
 - Members can **leave** a club or **delete their account**. Their name and ratings stay in each club's history, unlinked.
 
-Limits that keep the free tiers comfortable: 40 members per club, 20 clubs per person, 1,500 screenings per club, 60 party images per club (2 MB each), 300 watchlist films per person.
+Limits that keep the free tiers comfortable: 40 members per club, 20 clubs per person, 1,500 screenings per club, 60 party images per club (3 MB each; party mode is only switched on for JBOIZ), 300 watchlist films per person.
 
 ## One-time setup
 

@@ -941,7 +941,7 @@ let members = [];   // [{name, pick_order}]
 let slots = null;   // [{date, title, ..., poster, ratings: {name: score}, reviews: {name: {text, at}}, missed: Set<name>}]
 let me = null;      // logged-in member's name in this club, or null
 let session = null;
-let club = null;    // {id, slug, name, schedule_note}
+let club = null;    // {id, slug, name, schedule_note, party}
 let showAll = false;
 let sortMode = "newest";              // newest | highest | lowest | az
 let onlyUnrated = false;              // "Not rated by me" filter
@@ -980,7 +980,7 @@ async function load() {
   const err = m.error || s.error || r.error;
   if (err) throw err;
   canMiss = !a.error; // the absences table may not exist yet
-  canParty = !st.error;
+  canParty = !!club.party && !st.error; // party mode is switched on per club
   stickers = st.data || [];
   canVote = !rv.error;
   votes = new Map();
@@ -1730,13 +1730,13 @@ async function addPartyImages(files, at) {
   const layer = $("party-layer").getBoundingClientRect();
   let i = 0;
   for (const f of imgs) {
-    if (f.size > 2 * 1024 * 1024 && f.type === "image/gif") { toast("That GIF is over 2 MB. Try a smaller one."); continue; }
+    if (f.size > 3 * 1024 * 1024 && f.type === "image/gif") { toast("That GIF is over 3 MB. Try a smaller one."); continue; }
     toast("Adding image…");
     let prepared;
     try { prepared = await prepareImage(f); } catch (e) { toast("Couldn't read that image."); continue; }
     const path = `${club.id}/${crypto.randomUUID()}.${prepared.ext}`;
     const up = await sb.storage.from("party").upload(path, prepared.blob, { contentType: prepared.type, cacheControl: "31536000" });
-    if (up.error) { toast(/size|large/i.test(up.error.message) ? "That image is too big (2 MB max)." : "Couldn't upload that image. Try again."); continue; }
+    if (up.error) { toast(/size|large/i.test(up.error.message) ? "That image is too big (3 MB max)." : "Couldn't upload that image. Try again."); continue; }
     const cx = at ? at.x : innerWidth / 2, cy = at ? at.y : innerHeight / 3;
     const w = Math.min(0.3, 260 / layer.width);
     const row = {
@@ -2930,12 +2930,12 @@ $("club-admin-body").addEventListener("click", async e => {
 
 /* ---------- open a club ---------- */
 async function refreshClub() {
-  const { data } = await sb.from("clubs").select("id, slug, name, schedule_note").eq("id", club.id).maybeSingle();
+  const { data } = await sb.from("clubs").select("id, slug, name, schedule_note, party").eq("id", club.id).maybeSingle();
   if (!data) { location.href = location.pathname; return; } // deleted, or you were removed
   club = data; applyClubName(); render();
 }
 async function openClub() {
-  const { data, error } = await sb.from("clubs").select("id, slug, name, schedule_note").eq("slug", CLUB_SLUG).maybeSingle();
+  const { data, error } = await sb.from("clubs").select("id, slug, name, schedule_note, party").eq("slug", CLUB_SLUG).maybeSingle();
   if (error) return showStatus("The club couldn't load.", "Check your connection and try again in a minute.");
   if (!data) {
     return showHome(`<div class="box"><h3>You're not in this club</h3><p>Clubs are private. To join, ask a member for the club's invite link.</p><div><a class="btn" href="./">Go to your clubs</a></div></div>`);

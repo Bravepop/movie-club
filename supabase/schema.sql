@@ -13,6 +13,7 @@ create table public.clubs (
   name           text not null check (char_length(btrim(name)) between 1 and 60),
   invite_code    text not null unique default substr(replace(gen_random_uuid()::text, '-', ''), 1, 12),
   schedule_note  text check (char_length(schedule_note) <= 200),
+  party          boolean not null default false,  -- party mode (images on the page); switched on by hand
   created_by     uuid references auth.users (id) on delete set null,
   created_at     timestamptz not null default now()
 );
@@ -83,7 +84,7 @@ create table public.review_votes (
   check (voter <> author)
 );
 
--- Party mode: images members drop onto the page. x and w are fractions of the page width;
+-- Party mode: images members drop onto the page (only in clubs with party switched on). x and w are fractions of the page width;
 -- y is pixels from the top. The file lives in the private "party" bucket at <club id>/<file>.
 create table public.stickers (
   id          uuid primary key default gen_random_uuid(),
@@ -169,6 +170,11 @@ create function public.my_name(c uuid) returns text
 language sql stable security definer set search_path = public as $$
   select name from members where club_id = c and user_id = auth.uid()
 $$;
+-- Does this club have party mode?
+create function public.party_on(c uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select party from clubs where id = c), false)
+$$;
 
 /* ---------------------------------------------------------------- access rules */
 
@@ -218,7 +224,7 @@ create policy "Members take back their vote" on public.review_votes for delete t
 
 -- Like the old spreadsheet, any member can add, move, resize or remove any image.
 create policy "Members add stickers" on public.stickers for insert to authenticated
-  with check (added_by = public.my_name(club_id));
+  with check (added_by = public.my_name(club_id) and public.party_on(club_id));
 create policy "Members move stickers" on public.stickers for update to authenticated
   using (public.is_member(club_id)) with check (public.is_member(club_id));
 create policy "Members remove stickers" on public.stickers for delete to authenticated
@@ -571,7 +577,7 @@ select cron.schedule('mark-missed-screenings', '0 7 * * *', $$select public.mark
 
 revoke execute on all functions in schema public from public, anon;
 grant execute on function
-  public.is_member(uuid), public.is_admin(uuid), public.my_name(uuid),
+  public.is_member(uuid), public.is_admin(uuid), public.my_name(uuid), public.party_on(uuid),
   public.create_club(text, text), public.invite_preview(text), public.join_club(text, text), public.leave_club(uuid),
   public.admin_update_club(uuid, text, text), public.admin_new_invite(uuid), public.admin_invite_code(uuid),
   public.admin_add_member(uuid, text, boolean), public.admin_rename_member(uuid, text, text),
@@ -586,12 +592,14 @@ alter default privileges in schema public revoke execute on functions from publi
 
 -- Private bucket: files sit under <club id>/ and only that club's members can see or change them.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('party', 'party', false, 2097152, array['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+values ('party', 'party', false, 3145728, array['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 create policy "Members see party images" on storage.objects for select to authenticated
   using (bucket_id = 'party' and public.is_member(((storage.foldername(name))[1])::uuid));
 create policy "Members upload party images" on storage.objects for insert to authenticated
-  with check (bucket_id = 'party' and public.is_member(((storage.foldername(name))[1])::uuid));
+  with check (bucket_id = 'party'
+    and public.is_member(((storage.foldername(name))[1])::uuid)
+    and public.party_on(((storage.foldername(name))[1])::uuid));
 create policy "Members delete party images" on storage.objects for delete to authenticated
   using (bucket_id = 'party' and public.is_member(((storage.foldername(name))[1])::uuid));
 
