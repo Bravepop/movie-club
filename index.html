@@ -344,7 +344,7 @@ th button[aria-sort] { color: var(--fg); }
 .grid-table tbody tr:last-child .me { border-bottom: 2px solid var(--accent); }
 /* Crosshair */
 .grid-table td.hrow, .grid-table td.hcol { box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--fg) 12%, transparent); }
-.grid-table th.hrow, .grid-table th.hcol { background: var(--accent); color: var(--on-accent); }
+.grid-table th.hrow, .grid-table th.hcol, .grid-table thead th.me.hcol { background: var(--accent); color: var(--on-accent); }
 .grid-table td.hcell { box-shadow: inset 0 0 0 2px var(--fg); }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--muted); font-size: 13px; }
 .legend .chip { display: inline-flex; align-items: center; gap: 6px; }
@@ -742,6 +742,7 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
             <button type="button" data-sort="lowest">Lowest</button>
             <button type="button" data-sort="rated">Most rated</button>
             <button type="button" data-sort="missed">Most missed</button>
+            <button type="button" data-sort="attendance">Best attendance</button>
             <button type="button" data-sort="az">A–Z</button>
           </div>
         </div>
@@ -1508,14 +1509,19 @@ $("grid").addEventListener("pointerover", e => {
 $("grid").addEventListener("pointerleave", () => setGridHover(null));
 
 function renderMembers({ C, watched }) {
-  const fmtD = d => (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(1);
+  const fmtD = d => (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(2);
   // Everyone's ratings by name, for comparing tastes.
   const byName = Object.fromEntries(C.map((name, ci) => [name, new Map(watched.filter(f => f.vals[ci] > 0).map(f => [f.date, f.vals[ci]]))]));
 
   const cards = C.map((name, ci) => {
     const missed = watched.filter(f => f.missed.has(name)).length;
     const rated = watched.filter(f => f.vals[ci] > 0).map(f => ({ f, v: f.vals[ci], d: f.vals[ci] - f.avg }));
-    const card = { name, missed, count: rated.length, avg: rated.length ? mean(rated.map(r => r.v)) : null };
+    // Attendance counts screenings since they joined the club.
+    const joined = (members.find(m => m.name === name)?.created_at || "").slice(0, 10);
+    const since = watched.filter(f => f.date >= joined);
+    const attended = since.filter(f => !f.missed.has(name)).length;
+    const card = { name, missed, count: rated.length, avg: rated.length ? mean(rated.map(r => r.v)) : null,
+      attendance: since.length ? attended / since.length : null, attended, eligible: since.length };
     if (!rated.length) return card;
 
     card.spread = [1, 2, 3, 4, 5].map(n => rated.filter(r => r.v === n).length);
@@ -1567,6 +1573,7 @@ function renderMembers({ C, watched }) {
     lowest: (a, b) => (a.avg ?? 99) - (b.avg ?? 99),
     rated: (a, b) => b.count - a.count || byAvg(a, b),
     missed: (a, b) => b.missed - a.missed || a.name.localeCompare(b.name),
+    attendance: (a, b) => (b.attendance ?? -1) - (a.attendance ?? -1) || a.name.localeCompare(b.name),
     az: (a, b) => a.name.localeCompare(b.name)
   };
   cards.sort(sorters[mode]);
@@ -1585,6 +1592,7 @@ function renderMembers({ C, watched }) {
         <div>
           <div class="name">${esc(c.name)}</div>
           <div class="sub">${c.count ? `Rated ${c.count} of ${watched.length}` : "No ratings yet"}${canMiss ? ` · Missed ${c.missed}` : ""}${c.reviews ? ` · ${plural(c.reviews, "review")}` : ""}</div>
+          ${canMiss && c.attendance != null ? `<div class="sub" title="Was at ${c.attended} of ${plural(c.eligible, "screening")} since joining">${Math.round(c.attendance * 100)}% attendance</div>` : ""}
         </div>
         ${c.avg != null ? `<div class="score-big"><span class="avg">${c.avg.toFixed(2)}</span>${stars(c.avg)}</div>` : ""}
       </div>`;
