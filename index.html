@@ -1,0 +1,2976 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Movie Club</title>
+<meta name="description" content="Private movie clubs: take turns picking films, then rate and review them together.">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EM%3C/text%3E%3C/svg%3E">
+<script>
+  // Apply the saved palette before the page paints, so it never flashes the default.
+  try {
+    const p = localStorage.getItem("mc-palette");
+    if (p && p !== "charcoal") document.documentElement.dataset.palette = p.startsWith("custom") ? "custom" : p;
+    if (p && p.startsWith("custom")) {
+      const list = JSON.parse(localStorage.getItem("mc-custom-palettes") || "null");
+      const c = (list && list.find(x => "custom:" + x.id === p)) || JSON.parse(localStorage.getItem("mc-custom-palette") || "null");
+      if (c && c.vars) {
+        for (const [k, v] of Object.entries(c.vars)) document.documentElement.style.setProperty("--" + k, v);
+        document.documentElement.style.colorScheme = c.vars["color-scheme"] || "";
+      }
+    }
+  } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a cinema lobby. Marquee header, a "your turn" bar for the logged-in member, then pinned tabs:
+   Next up (ticket, latest takes) · Schedule (program, pick order) · Ratings (watched table, grid) · Critics. */
+:root {
+  /* Charcoal: the default palette */
+  --bg: #1c1d20;
+  --surface: #26282c;
+  --sunk: #202124;
+  --line: #3a3c41;
+  --fg: #ecebe8;
+  --muted: #a4a3a0;
+  --display: #f2b544;
+  --accent: #f2b544;
+  --on-accent: #1b1406;
+  --bulb: #f6c45c;
+  --danger: #ff8a7a;
+  --good: #6fcf7f;
+  --font-display: "Bungee", "Impact", "Arial Black", sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-data: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+/* Personal palettes, picked in Settings and saved per browser. */
+:root[data-palette="velvet"] {
+  --bg: #170c0e; --surface: #22131a; --sunk: #1c1014; --line: #3c2329;
+  --fg: #f4e6d8; --muted: #b39a90; --display: #f2b544; --accent: #f2b544;
+  --on-accent: #1e1206; --bulb: #f6c45c; --danger: #ff8a7a; color-scheme: dark;
+}
+:root[data-palette="midnight"] {
+  --bg: #0f1626; --surface: #18213a; --sunk: #131b2f; --line: #2a3654;
+  --fg: #e6ebf5; --muted: #9aa6c0; --display: #8cc8ff; --accent: #ffc94d;
+  --on-accent: #1a1405; --bulb: #ffd97a; --danger: #ff8a8a; color-scheme: dark;
+}
+:root[data-palette="noir"] {
+  --bg: #0b0b0b; --surface: #161616; --sunk: #101010; --line: #2e2e2e;
+  --fg: #f2f2f2; --muted: #9c9c9c; --display: #ffffff; --accent: #e6e6e6;
+  --on-accent: #0b0b0b; --bulb: #fff4c2; --danger: #ff6b6b; color-scheme: dark;
+}
+:root[data-palette="drive-in"] {
+  --bg: #0e1f1f; --surface: #152b2b; --sunk: #112424; --line: #24413f;
+  --fg: #e9f3ef; --muted: #93b1aa; --display: #ff7a59; --accent: #ff7a59;
+  --on-accent: #1d0d07; --bulb: #ffd166; --danger: #ff8a7a; color-scheme: dark;
+}
+:root[data-palette="popcorn"] {
+  --bg: #fbf6e9; --surface: #fffdf6; --sunk: #f3ead3; --line: #e3d6b4;
+  --fg: #2b2214; --muted: #786a4f; --display: #c8361d; --accent: #9c6200;
+  --on-accent: #ffffff; --bulb: #e9a21a; --danger: #b3261e; --good: #23863a; color-scheme: light;
+}
+:root[data-palette="arthouse"] {
+  --bg: #eef0ec; --surface: #fafbf8; --sunk: #e2e6df; --line: #cfd5cb;
+  --fg: #1d241f; --muted: #5f6b62; --display: #2f6b4f; --accent: #9a6418;
+  --on-accent: #ffffff; --bulb: #c9862b; --danger: #b3261e; --good: #23863a; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+}
+[hidden] { display: none !important; }
+.page { position: relative; max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: calc(24px + env(safe-area-inset-top, 0px)) 64px; display: grid; gap: 24px; }
+h1, h2 { font-family: var(--font-display); font-weight: 400; color: var(--display); text-wrap: balance; margin: 0; line-height: 1.05; }
+h2 { font-size: clamp(22px, 3.2vw, 28px); }
+.label { font-family: var(--font-body); font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--muted); }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+section { display: grid; gap: 16px; min-width: 0; }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.section-head p { margin: 0; color: var(--muted); max-width: 60ch; }
+.panel { display: grid; gap: 48px; padding-top: 8px; }
+.muted { color: var(--muted); }
+
+/* Buttons */
+.btn { font: inherit; font-weight: 600; font-size: 14px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.btn:hover { background: var(--sunk); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.danger { color: var(--danger); }
+.btn.small { padding: 3px 10px; font-size: 13px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.link-btn { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.link-btn:hover { color: var(--fg); }
+
+/* Marquee */
+.marquee {
+  position: relative; padding: 28px 24px 24px; border-radius: 6px; text-align: center;
+  background: var(--surface); border: 1px solid var(--line);
+  display: grid; gap: 12px; justify-items: center;
+}
+.marquee::before, .marquee::after {
+  content: ""; position: absolute; left: 12px; right: 12px; height: 8px;
+  background: radial-gradient(circle, var(--bulb) 0 3px, transparent 3.5px) 0 0 / 18px 8px repeat-x;
+}
+.marquee::before { top: 8px; }
+.marquee::after { bottom: 8px; }
+.marquee h1 { font-size: clamp(34px, 8vw, 76px); letter-spacing: .02em; }
+.home-link { color: inherit; text-decoration: none; border-radius: 6px; }
+.home-link:hover { filter: brightness(1.12); }
+.marquee .tagline { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; color: var(--muted); }
+.marquee .tagline b { color: var(--fg); font-weight: 600; }
+/* Top-left corner of the marquee: who's logged in. Lines up with the party switch on the right. */
+.account { position: absolute; top: 22px; left: 18px; z-index: 11; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 30px; font-size: 13px; text-align: left; max-width: calc(50% - 24px); }
+.account .btn { padding: 4px 12px; border-radius: 999px; font-size: 12px; }
+.gear-btn { display: inline-grid; place-items: center; flex: none; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; }
+.gear-btn:hover { color: var(--fg); border-color: var(--accent); }
+.gear-btn svg { display: block; width: 22px; height: 22px; }
+.account .me { font-weight: 700; }
+
+/* Your turn */
+.turn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; border-radius: 8px; background: var(--sunk); border: 1px solid var(--line); }
+.turn .label { color: var(--display); }
+.turn .item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.turn .sep { width: 1px; align-self: stretch; background: var(--line); }
+.chip-btn { font: inherit; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.chip-btn:hover { border-color: var(--accent); }
+
+/* Tabs */
+.tabs {
+  position: sticky; top: 0; z-index: 5; background: var(--bg);
+  padding-top: env(safe-area-inset-top, 0px);
+  display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--line); margin-inline: -16px; padding-inline: 16px;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  font: inherit; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 14px;
+  color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent;
+  padding: 14px 14px 11px; cursor: pointer; white-space: nowrap;
+}
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tab .count { font-family: var(--font-data); font-size: 12px; font-weight: 500; letter-spacing: 0; opacity: .7; }
+
+/* Status */
+.status { padding: 40px 24px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; }
+.status strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
+
+/* Posters */
+.poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; background: var(--sunk); max-width: 100%; }
+.poster.blank { display: grid; place-items: center; color: var(--muted); font-family: var(--font-display); font-size: 20px; }
+/* Bigger poster that follows the cursor (mouse only). */
+.poster-pop {
+  position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none;
+  width: 420px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
+  background: var(--sunk); box-shadow: 0 14px 44px rgb(0 0 0 / .5);
+  opacity: 0; transform: scale(.96); transition: opacity .12s ease-out, transform .12s ease-out;
+}
+.poster-pop.show { opacity: 1; transform: none; }
+@media (hover: hover) and (pointer: fine) { img.poster { cursor: zoom-in; } }
+
+/* Ticket */
+.ticket {
+  display: grid; grid-template-columns: minmax(0, 1fr) 210px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+}
+.ticket.has-poster { grid-template-columns: auto minmax(0, 1fr) 210px; }
+.ticket-poster { width: 212px; padding: 12px 0 12px 12px; }
+.ticket-main { padding: 24px 28px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.ticket-main .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 5.5vw, 52px); line-height: 1; color: var(--fg); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.ticket-main .title.tba { color: var(--muted); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
+.facts div { display: grid; gap: 0; }
+.facts dt { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 500; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.stub {
+  position: relative; border-left: 2px dashed var(--line); background: var(--sunk);
+  padding: 24px 20px; display: grid; align-content: center; justify-items: center; gap: 4px; text-align: center;
+}
+.stub::before, .stub::after { content: ""; position: absolute; left: -12px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); }
+.stub::before { top: -11px; } .stub::after { bottom: -11px; }
+.stub .day { font-family: var(--font-display); font-size: 54px; line-height: 1; color: var(--display); }
+.stub .when { font-weight: 700; font-size: 17px; }
+.stub .countdown { color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--sunk); }
+.pill.go { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.pill.warn { color: var(--danger); border-color: currentColor; background: transparent; }
+
+/* Takes */
+.takes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.take { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); align-content: start; }
+.take .who { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 700; }
+.take .film { font-size: 13px; color: var(--muted); }
+.take q { font-size: 16px; quotes: "“" "”"; overflow-wrap: anywhere; }
+.take .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.votes { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 1px; flex: none; }
+.votes button { font: inherit; font-size: 13px; line-height: 1; width: 28px; height: 26px; border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer; }
+.votes button:hover:not([disabled]) { color: var(--fg); background: var(--sunk); }
+.votes button[disabled] { cursor: default; opacity: .45; }
+.votes button.up[aria-pressed="true"] { color: #0d1f14; background: #6dd674; }
+.votes button.down[aria-pressed="true"] { color: #1a0a08; background: #e74c3c; }
+.votes .net { min-width: 22px; text-align: center; font-family: var(--font-data); font-size: 13px; font-weight: 500; }
+.votes .net.pos { color: var(--good); }
+.votes .net.neg { color: var(--danger); }
+.votes { position: relative; }
+.votes .net-btn { font: inherit; width: auto; min-width: 26px; height: 26px; padding: 0 6px; border: 0; border-radius: 999px; background: none; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.votes .net-btn:hover { background: var(--sunk); }
+.voters-pop { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: max-content; max-width: 240px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / .35); font-size: 13px; text-align: left; gap: 4px; }
+.voters-pop b { font-weight: 700; }
+/* Shown on hover or keyboard focus; on touch screens a tap toggles it (.open). */
+.votes:hover .voters-pop, .votes:focus-within .voters-pop, .voters-pop.open { display: grid; }
+.voters-pop .up-l b { color: var(--good); }
+.voters-pop .down-l b { color: var(--danger); }
+
+/* Schedule */
+.schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr) 60px; gap: 12px; align-items: center; padding: 6px 6px 6px 14px; min-height: 102px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.slot.mine { border-color: var(--accent); }
+.slot.is-next { background: var(--sunk); }
+.slot .next-tag { display: inline-block; margin-bottom: 2px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; font-stretch: 75%; letter-spacing: .1em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); }
+.soon { display: grid; gap: 12px; }
+.soon .schedule { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.slot .date { text-align: center; line-height: 1.1; }
+.slot .date .m { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; font-stretch: 75%; }
+.slot .date .d { font-family: var(--font-display); font-size: 24px; color: var(--display); }
+.slot .film { font-weight: 600; overflow-wrap: anywhere; }
+.slot .film.tba { color: var(--muted); font-weight: 500; font-style: italic; }
+.slot .who { font-size: 13px; color: var(--muted); }
+.slot .edit { margin-top: 2px; }
+.slot .poster { width: 60px; }
+
+/* Tables */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+thead th { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; color: var(--muted); background: var(--sunk); white-space: nowrap; }
+th button { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button[aria-sort="ascending"]::after { content: "▲"; font-size: 9px; }
+th button[aria-sort="descending"]::after { content: "▼"; font-size: 9px; }
+th button[aria-sort] { color: var(--fg); }
+/* Already watched: one row per film */
+.watch-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); background: none; border: 0; padding: 7px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--fg); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+.watch-count { font-size: 13px; color: var(--muted); }
+.films { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 10px; align-items: start; }
+.film-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 14px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.film-row.open { border-color: var(--accent); }
+.film-row > .poster, .film-row > .poster-slot { grid-row: 1 / span 3; width: 64px; align-self: start; }
+.poster-slot { aspect-ratio: 2 / 3; border-radius: 4px; background: var(--sunk); }
+.film-hit { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; display: block; width: 100%; }
+.film-hit .t { font-weight: 700; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+.film-hit:hover .t { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.film-hit .meta { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+.film-hit .more { font-size: 12px; color: var(--muted); }
+/* Club rating meter */
+.meter-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; margin-top: 6px; }
+.meter {
+  position: relative; height: 14px; border-radius: 999px; margin-inline: 12px;
+  background: linear-gradient(90deg, #e74c3c 0%, #f39c12 28%, #f4d03f 52%, #6dd674 76%, #289e47 100%);
+  box-shadow: 0 0 0 4px var(--sunk), 0 0 0 5px var(--line);
+}
+.meter.empty { background: var(--sunk); }
+.meter .knob {
+  position: absolute; top: 50%; width: 26px; height: 26px; border-radius: 50%; transform: translate(-50%, -50%);
+  background: #15161a; border: 6px solid var(--ring); box-shadow: 0 0 0 3px #15161a, 0 0 0 4px var(--line), 0 2px 8px rgb(0 0 0 / .45);
+}
+.meter-score { display: grid; justify-items: end; line-height: 1; min-width: 64px; }
+.meter-score b { font-family: var(--font-data); font-size: 26px; font-weight: 500; }
+.meter-score small { margin-top: 4px; font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; font-stretch: 75%; white-space: nowrap; }
+.my-rating { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; color: var(--muted); }
+.film-detail { grid-column: 1 / -1; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+.film-detail .links { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+@media (max-width: 520px) {
+  .film-row { grid-template-columns: 52px minmax(0, 1fr); gap: 4px 12px; }
+  .film-row > .poster, .film-row > .poster-slot { width: 52px; grid-row: 1; }
+  .meter-row, .my-rating { grid-column: 1 / -1; }
+  .film-hit .t { font-size: 16px; }
+}
+.detail-takes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.detail-takes li { display: grid; grid-template-columns: 80px auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.detail-takes .votes { align-self: center; }
+.detail-takes .name { font-weight: 700; }
+.detail-takes .text { overflow-wrap: anywhere; }
+.missed-line { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.missed-line b { color: var(--fg); font-weight: 600; }
+.attend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; }
+.review-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.review-form input { font: inherit; flex: 1 1 240px; min-width: 0; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--accent) 35%, transparent); } to { box-shadow: inset 0 0 0 999px transparent; } }
+
+.stars { position: relative; display: inline-block; font-size: 15px; letter-spacing: 1px; line-height: 1; color: var(--line); vertical-align: -1px; white-space: nowrap; }
+.stars span { position: absolute; inset: 0 auto 0 0; overflow: hidden; white-space: nowrap; color: var(--accent); }
+.score { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Rate widget */
+.rate { display: inline-flex; gap: 0; }
+.rate button { font-size: 20px; line-height: 1; background: none; border: 0; padding: 2px 1px; cursor: pointer; color: var(--line); }
+.rate button.on { color: var(--accent); }
+.rate:hover button { color: var(--accent); }
+.rate button:hover ~ button { color: var(--line); }
+
+/* Ratings grid */
+.grid-table th, .grid-table td { text-align: center; padding: 0; border: 1px solid var(--bg); }
+.grid-table thead th { padding: 8px 6px; }
+.grid-table th.film { text-align: left; padding: 6px 12px; font-weight: 600; white-space: nowrap; background: var(--surface); position: sticky; left: 0; z-index: 1; }
+.grid-table td { width: 52px; min-width: 44px; height: 34px; font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 14px; }
+.grid-table td.blank { color: var(--muted); opacity: .5; }
+.grid-table td.missed { color: var(--muted); font-family: var(--font-body); font-stretch: 75%; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; background: repeating-linear-gradient(-45deg, transparent 0 5px, color-mix(in oklab, var(--line) 60%, transparent) 5px 6px); }
+.grid-table td.avg { font-weight: 500; background: var(--sunk); width: 64px; }
+/* Its own scroll box, so names stay pinned on top and titles on the left. */
+.grid-scroll { max-height: min(70vh, 760px); overflow: auto; }
+.grid-table thead th { position: sticky; top: 0; z-index: 2; background: var(--sunk); }
+.grid-table thead th.corner { left: 0; z-index: 3; }
+/* Your column */
+.grid-table .me { border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+.grid-table thead th.me { color: var(--fg); border-top: 2px solid var(--accent); }
+.grid-table tbody tr:last-child .me { border-bottom: 2px solid var(--accent); }
+/* Crosshair */
+.grid-table td.hrow, .grid-table td.hcol { box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--fg) 12%, transparent); }
+.grid-table th.hrow, .grid-table th.hcol { background: var(--accent); color: var(--on-accent); }
+.grid-table td.hcell { box-shadow: inset 0 0 0 2px var(--fg); }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--muted); font-size: 13px; }
+.legend .chip { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 18px; height: 14px; border-radius: 3px; display: inline-block; }
+
+/* Critics */
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+.member { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); align-content: start; min-width: 0; }
+.member.me { border-color: var(--accent); }
+.member-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.member-head .name { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--fg); }
+.member-head .sub { margin-top: 6px; font-size: 14px; color: var(--muted); }
+.member-head .score-big { text-align: right; display: grid; justify-items: end; gap: 4px; }
+.member-head .avg { font-family: var(--font-data); font-size: 34px; font-weight: 500; line-height: 1; }
+.member-head .stars { font-size: 16px; }
+.spread { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.spread .col { position: relative; display: grid; gap: 4px; justify-items: center; border-radius: 6px; outline: none; }
+.spread .col.has { cursor: default; }
+.spread .col.has:hover .track, .spread .col.has:focus-visible .track { box-shadow: 0 0 0 2px var(--accent); }
+/* Hover a bar to see the films behind it. The wrapper's padding bridges the gap so the list stays open while you move into it. */
+.spread-pop { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); z-index: 6; padding-top: 6px; }
+.spread .col:first-child .spread-pop { left: 0; transform: none; }
+.spread .col:last-child .spread-pop { left: auto; right: 0; transform: none; }
+.spread .col.has:hover .spread-pop, .spread .col.has:focus-within .spread-pop { display: block; }
+.spread-pop .inner { width: max-content; min-width: 160px; max-width: 260px; max-height: 240px; overflow-y: auto; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / .35); font-size: 13px; text-align: left; }
+.spread-pop .h { margin-bottom: 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.spread-pop ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.spread-pop .inner { max-width: 320px; }
+.spread-pop ul { grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: baseline; }
+.spread-pop li { display: contents; }
+.spread-pop .dt { color: var(--muted); white-space: nowrap; font-family: var(--font-data); font-size: 12px; }
+.spread-pop .club { white-space: nowrap; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+.spread-pop .club b { font-weight: 600; }
+.spread .track { width: 100%; height: 56px; display: flex; align-items: flex-end; background: var(--sunk); border-radius: 4px; overflow: hidden; }
+.spread .fill { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 0; }
+.spread .n { font-family: var(--font-data); font-size: 13px; }
+.spread .k { font-size: 12px; color: var(--muted); }
+.extremes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.extreme { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 8px; background: var(--sunk); min-width: 0; }
+.extreme.no-poster { grid-template-columns: minmax(0, 1fr); }
+.extreme .poster { width: 56px; }
+.extreme .label { font-size: 11px; }
+.extreme .t { font-weight: 600; overflow-wrap: anywhere; line-height: 1.25; }
+.extreme .v { font-size: 13px; color: var(--muted); }
+.member dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; font-size: 14px; }
+.member dt { color: var(--muted); }
+.member dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.member dd small { color: var(--muted); }
+.member blockquote { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--sunk); font-size: 15px; overflow-wrap: anywhere; }
+.member blockquote cite { display: block; margin-top: 4px; font-style: normal; font-size: 13px; color: var(--muted); }
+.bar { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 520px) {
+  .members { grid-template-columns: minmax(0, 1fr); }
+  .member { padding: 18px; }
+  .extremes { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Side boxes */
+.box { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: grid; gap: 12px; }
+.box h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 18px; color: var(--display); }
+.box p { margin: 0; color: var(--muted); font-size: 14px; }
+.order { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.order li { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border-radius: 6px; background: var(--sunk); }
+.order li.up { background: var(--accent); color: var(--on-accent); }
+.order .n { font-family: var(--font-data); font-size: 12px; opacity: .75; }
+.order .who { font-weight: 700; }
+
+/* Dialogs */
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); padding: 0; width: min(520px, calc(100vw - 32px)); }
+dialog.narrow { width: min(380px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+dialog form { display: grid; gap: 14px; padding: 22px; }
+dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--display); }
+.field { display: grid; gap: 4px; }
+.field label { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; color: var(--muted); }
+.field input, .field select { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%; }
+.field .help { font-size: 12px; color: var(--muted); }
+.search-results { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.search-results button { font: inherit; color: var(--fg); width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; padding: 5px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; }
+.search-results button:hover, .search-results button:focus-visible { border-color: var(--accent); }
+.poster-pick { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; }
+.poster-pick .poster { width: 64px; }
+.poster-pick .actions { display: grid; gap: 4px; justify-items: start; }
+.poster-grid { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; }
+.poster-grid button { display: block; width: 100%; padding: 0; border: 2px solid transparent; border-radius: 5px; background: var(--sunk); cursor: pointer; }
+.poster-grid button:hover, .poster-grid button:focus-visible { border-color: var(--accent); }
+.poster-grid button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.poster-grid img { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; }
+.search-results .thumb { width: 34px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; background: var(--sunk); display: block; }
+.search-results b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.search-results small { color: var(--muted); font-size: 12px; }
+.search-results button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.search-results button:disabled { opacity: .55; cursor: default; border-color: var(--line); }
+
+/* My watchlist (Schedule tab) */
+.box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; }
+.box-head small { color: var(--muted); font-size: 13px; }
+.wl-add { max-width: 440px; }
+.wl-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; }
+.wl-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border-radius: 6px; background: var(--sunk); }
+.wl-item .thumb { width: 40px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; background: var(--bg); display: block; }
+.wl-item b { display: block; font-weight: 600; overflow-wrap: anywhere; line-height: 1.25; }
+.wl-item small { color: var(--muted); font-size: 12px; }
+.wl-remove { font: inherit; font-size: 18px; line-height: 1; width: 28px; height: 28px; border-radius: 50%; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.wl-remove:hover, .wl-remove:focus-visible { color: var(--danger); background: var(--bg); }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; font-stretch: 75%; }
+.or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.check { display: flex; gap: 8px; align-items: center; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.dialog-actions .right { display: flex; gap: 8px; margin-left: auto; }
+.form-error { color: var(--danger); font-size: 14px; margin: 0; }
+
+/* Settings */
+.palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; border: 0; margin: 0; padding: 0; }
+.palettes legend { padding: 0; margin-bottom: 8px; }
+.palette { position: relative; display: grid; gap: 6px; padding: 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--bg); cursor: pointer; }
+.palette:has(input:checked) { border-color: var(--accent); }
+.palette:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.palette input { position: absolute; opacity: 0; pointer-events: none; }
+.palette .sw { display: grid; grid-template-columns: 2fr 1fr 1fr; height: 40px; border-radius: 5px; overflow: hidden; border: 1px solid rgb(127 127 127 / .3); }
+.palette .name { font-weight: 700; font-size: 14px; }
+.palette .note { font-size: 12px; color: var(--muted); }
+.custom-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+.custom-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.color-field { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.color-field input { width: 44px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; flex: none; }
+.color-field small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.custom-warn { margin: 0; font-size: 13px; color: var(--danger); }
+.custom-share { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.custom-import { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.custom-import input { font: inherit; font-size: 14px; flex: 1 1 220px; min-width: 0; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.custom-share .note { font-size: 13px; color: var(--muted); width: 100%; margin: 0; }
+.custom-share .note.err { color: var(--danger); }
+#custom-delete.confirm { background: var(--danger); color: #fff; border-color: transparent; }
+.custom-editor .field input { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+
+/* Party mode: images members drop on the page */
+/* Above everything on the page (tabs included); only messages, the poster preview and dialogs go higher. */
+.party-layer { position: absolute; inset: 0; z-index: 9; pointer-events: none; }
+.sticker { position: absolute; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.sticker img { display: block; width: 100%; height: auto; border-radius: 2px; pointer-events: none; }
+.party-edit .sticker { pointer-events: auto; cursor: grab; touch-action: none; }
+.party-edit .sticker:hover, .party-edit .sticker.active { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.sticker.dragging { cursor: grabbing; opacity: .9; }
+.sticker .st-del, .sticker .st-resize { position: absolute; display: none; }
+.party-edit .sticker:hover .st-del, .party-edit .sticker:hover .st-resize,
+.party-edit .sticker.active .st-del, .party-edit .sticker.active .st-resize { display: grid; }
+.sticker .st-del { top: -12px; right: -12px; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; place-items: center; font: inherit; font-size: 13px; font-weight: 700; border: 0; cursor: pointer; background: var(--fg); color: var(--bg); box-shadow: 0 2px 6px rgb(0 0 0 / .4); }
+.sticker .st-del.confirm { background: var(--danger); color: #fff; }
+.sticker .st-resize { right: -8px; bottom: -8px; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; touch-action: none; }
+/* Party corner: switch (and Add image when it's on) in the marquee's top-right corner */
+/* Above the party images (z-index 9) so the switch can always be reached. */
+.party-corner { position: absolute; top: 20px; right: 18px; z-index: 11; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: calc(100% - 36px); }
+.party-add { font-size: 12px; padding: 4px 12px; border-radius: 999px; }
+.party-switch {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px;
+  font: inherit; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px;
+  color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+}
+.party-switch:hover { color: var(--fg); }
+.party-switch .track { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); transition: background .18s; }
+.party-switch .thumb { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .18s, background .18s; }
+.party-switch[aria-checked="true"] { color: var(--fg); border-color: var(--accent); }
+.party-switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
+.party-switch[aria-checked="true"] .thumb { transform: translateX(14px); background: var(--on-accent); }
+@media (max-width: 640px) {
+  .party-corner { top: 16px; right: 12px; }
+  .account { top: 16px; left: 12px; font-size: 12px; max-width: calc(100% - 200px); }
+  /* Narrow screens: just the switch, its label kept for screen readers. */
+  .party-switch { padding: 4px; }
+  .party-switch > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .party-add { padding: 4px 10px; }
+  .marquee { padding-top: 64px; }
+}
+.confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 40; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .party-switch .track, .party-switch .thumb { transition: none; } }
+.party-drop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; font-family: var(--font-display); font-size: 28px; pointer-events: none; }
+
+/* Toast */
+.toast-btn { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 5px; padding: 2px 10px; margin-left: 12px; cursor: pointer; }
+.toast-btn:hover { background: color-mix(in oklab, currentColor 15%, transparent); }
+.unwatch-note { margin: 0; font-size: 14px; color: var(--muted); }
+.section-head p.wide { max-width: none; }
+/* Ratings tab: latest watched on the left, top and bottom film on the right, one line. */
+.watch-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 20px; font-size: 14px; color: var(--muted); }
+.watch-meta p { margin: 0; }
+.watch-meta b { color: var(--fg); font-weight: 600; }
+.unwatch-note b { color: var(--fg); font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
+
+footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 24px; }
+footer .version { display: block; margin-top: 6px; font-family: var(--font-data); font-size: 11px; opacity: .7; }
+
+@media (max-width: 640px) {
+  .ticket, .ticket.has-poster { grid-template-columns: minmax(0, 1fr); }
+  .ticket.has-poster { grid-template-columns: 128px minmax(0, 1fr); }
+  .ticket-poster { width: 128px; padding: 10px 0 10px 10px; }
+  .ticket-main { padding: 16px; }
+  .stub { grid-column: 1 / -1; }
+  .stub { border-left: 0; border-top: 2px dashed var(--line); grid-auto-flow: column; justify-content: space-between; align-items: center; text-align: left; justify-items: start; }
+  .stub::before { top: -12px; left: -11px; } .stub::after { top: -12px; bottom: auto; left: auto; right: -11px; }
+  .stub .day { font-size: 40px; }
+  .row2 { grid-template-columns: 1fr; }
+  .detail-takes li { grid-template-columns: 1fr auto; }
+  .detail-takes .text { grid-column: 1 / -1; }
+  .detail-takes .votes { grid-column: 1 / -1; justify-self: start; }
+  .turn .sep { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } .poster-pop { transition: none; } }
+
+/* Home: sign in, your clubs, start or join a club */
+.home { display: grid; gap: 20px; width: min(620px, 100%); margin: 0 auto; }
+.home .box h3 { font-size: 22px; }
+.home .help, .club-admin .help { color: var(--muted); font-size: 13px; margin: 0; }
+.pitch ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.club-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.club-list a { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; padding: 12px 14px; border-radius: 8px; background: var(--sunk); color: var(--fg); text-decoration: none; font-weight: 600; }
+.club-list a:hover { outline: 1px solid var(--accent); }
+.club-list small { color: var(--muted); font-weight: 400; font-size: 13px; }
+.home-foot { text-align: center; font-size: 13px; margin: 0; }
+.claim { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.claim legend { margin-bottom: 4px; }
+.field select { appearance: auto; }
+
+/* Club settings (admins) */
+#club-admin { width: min(640px, calc(100vw - 32px)); }
+.adm-section { display: grid; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--line); }
+.adm-section:first-child { padding-top: 0; margin-top: 0; border-top: 0; }
+.adm-members, .adm-dates { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.adm-members li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 4px 10px; align-items: center; padding: 8px 10px; border-radius: 6px; background: var(--bg); }
+.adm-members .n { font-family: var(--font-mono); color: var(--muted); text-align: center; }
+.adm-members .who { font-weight: 600; overflow-wrap: anywhere; }
+.adm-members .who small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.adm-members .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-members input { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); width: 100%; }
+.adm-dates { max-height: 240px; overflow: auto; }
+.adm-dates li { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; padding: 6px 10px; border-radius: 6px; background: var(--bg); }
+.inline-row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: end; }
+.inline-row .field { flex: 1 1 150px; }
+@media (min-width: 560px) { .adm-members li { grid-template-columns: 26px minmax(0, 1fr) auto; } .adm-members .acts { grid-column: auto; justify-content: end; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="party-layer" id="party-layer" hidden></div>
+  <header class="marquee">
+    <div class="account" id="account"></div>
+    <div class="party-corner" id="party-corner">
+      <button class="btn primary party-add" type="button" id="party-add" hidden>Add image</button>
+      <button class="party-switch" type="button" role="switch" id="party-switch" aria-checked="false" hidden>
+        <span>Party mode</span><span class="track" aria-hidden="true"><span class="thumb"></span></span>
+      </button>
+      <button class="gear-btn" type="button" id="btn-settings" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+    <span class="label">Now showing at</span>
+    <h1><a class="home-link" href="./" id="home-link">Movie Club</a></h1>
+    <div class="tagline" id="tagline"></div>
+  </header>
+
+  <div class="home" id="home" hidden></div>
+
+  <div class="turn" id="turn" hidden></div>
+
+  <nav class="tabs" role="tablist" aria-label="Sections" id="tabs">
+    <button class="tab" role="tab" id="tab-next" aria-controls="panel-next" data-tab="next">Next up</button>
+    <button class="tab" role="tab" id="tab-schedule" aria-controls="panel-schedule" data-tab="schedule">Schedule</button>
+    <button class="tab" role="tab" id="tab-ratings" aria-controls="panel-ratings" data-tab="ratings">Ratings</button>
+    <button class="tab" role="tab" id="tab-critics" aria-controls="panel-critics" data-tab="critics">Critics</button>
+  </nav>
+
+  <div class="status" id="status"><strong>Loading the club's schedule…</strong>Screenings and ratings are on their way.</div>
+
+  <div id="content" hidden>
+    <div class="panel" role="tabpanel" id="panel-next" aria-labelledby="tab-next">
+      <section aria-labelledby="next-h">
+        <div class="section-head"><h2 id="next-h">Next screening</h2></div>
+        <article class="ticket" id="ticket"></article>
+        <div class="soon" id="soon">
+          <div class="section-head">
+            <span class="label">Coming up</span>
+            <button class="link-btn" type="button" data-act="goto-tab" data-id="schedule">See the full schedule</button>
+          </div>
+          <ul class="schedule" id="soon-list"></ul>
+        </div>
+      </section>
+      <section aria-labelledby="takes-h" id="takes-section">
+        <div class="section-head">
+          <h2 id="takes-h">Latest takes</h2>
+          <p>What people said with their stars. Add yours from the Ratings tab, and vote on everyone else's.</p>
+        </div>
+        <div class="watch-controls" id="takes-controls" hidden>
+          <div class="seg" role="group" aria-label="Sort takes" id="takes-sort">
+            <button type="button" data-sort="newest">Newest</button>
+            <button type="button" data-sort="top">Top</button>
+          </div>
+        </div>
+        <ul class="takes" id="takes"></ul>
+        <div class="actions">
+          <button class="btn" type="button" id="takes-more" hidden></button>
+          <button class="btn" type="button" id="takes-less" hidden>Show less</button>
+          <span class="muted" id="takes-count" style="font-size:13px"></span>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-schedule" aria-labelledby="tab-schedule" hidden>
+      <section aria-labelledby="sched-h">
+        <div class="section-head">
+          <h2 id="sched-h">Coming up</h2>
+          <button class="btn primary" type="button" id="pick-next" hidden>Pick your next movie</button>
+          <p class="wide" id="sched-note"></p>
+        </div>
+        <div class="watch-controls" id="sched-controls" hidden>
+          <div class="seg" role="group" aria-label="Show dates" id="sched-filter">
+            <button type="button" data-filter="all">All dates</button>
+            <button type="button" data-filter="mine">My picks</button>
+          </div>
+          <span class="watch-count" id="sched-count"></span>
+        </div>
+        <ul class="schedule" id="schedule"></ul>
+        <button class="btn" id="sched-toggle" type="button" style="justify-self:start"></button>
+      </section>
+      <div class="box" id="watchlist-box" hidden>
+        <div class="box-head"><h3>My watchlist</h3><small>Only you can see this</small></div>
+        <div class="field wl-add" id="wl-add">
+          <label for="wl-search">Add a film</label>
+          <input id="wl-search" type="search" autocomplete="off" placeholder="Type a title">
+          <span class="help" id="wl-help" hidden></span>
+          <ul class="search-results" id="wl-results"></ul>
+        </div>
+        <ul class="wl-list" id="wl-list"></ul>
+        <p id="wl-empty">Nothing here yet. Add films you'd like to pick someday, then choose one when it's your turn.</p>
+      </div>
+      <div class="box">
+        <h3>Pick order</h3>
+        <ol class="order" id="order"></ol>
+        <p id="order-note"></p>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-ratings" aria-labelledby="tab-ratings" hidden>
+      <section aria-labelledby="watched-h">
+        <div class="section-head">
+          <h2 id="watched-h">Already watched</h2>
+          <p id="watched-sub"></p>
+        </div>
+        <div class="watch-meta">
+          <p class="unwatch-note" id="unwatch-note" hidden></p>
+          <p id="top-bottom"></p>
+        </div>
+        <div class="watch-controls">
+          <div class="seg" role="group" aria-label="Sort films" id="watch-sort">
+            <button type="button" data-sort="newest">Newest</button>
+            <button type="button" data-sort="highest">Highest</button>
+            <button type="button" data-sort="lowest">Lowest</button>
+            <button type="button" data-sort="az">A–Z</button>
+          </div>
+          <label class="toggle" id="unrated-toggle" hidden><input type="checkbox" id="only-unrated"> Not rated by me</label>
+          <span class="watch-count" id="watch-count"></span>
+        </div>
+        <ol class="films" id="films"></ol>
+      </section>
+      <section aria-labelledby="grid-h">
+        <div class="section-head">
+          <h2 id="grid-h">Every rating</h2>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="scroll grid-scroll"><table class="grid-table" id="grid"></table></div>
+      </section>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-critics" aria-labelledby="tab-critics" hidden>
+      <section aria-labelledby="mem-h">
+        <div class="section-head">
+          <h2 id="mem-h">The critics</h2>
+          <p>Averages count only the films each person rated. Taste twins compare films both people rated (3 or more).</p>
+        </div>
+        <div class="watch-controls">
+          <div class="seg" role="group" aria-label="Sort critics" id="critics-sort">
+            <button type="button" data-sort="me" id="critics-sort-me">You first</button>
+            <button type="button" data-sort="highest">Highest</button>
+            <button type="button" data-sort="lowest">Lowest</button>
+            <button type="button" data-sort="rated">Most rated</button>
+            <button type="button" data-sort="missed">Most missed</button>
+            <button type="button" data-sort="az">A–Z</button>
+          </div>
+        </div>
+        <div class="members" id="members"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer><span id="footer-note">Only members of this club can see it.</span> <a href="privacy.html">Privacy</a> · Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v1</span></footer>
+</main>
+
+<dialog id="club-admin" aria-labelledby="club-admin-h">
+  <form id="club-admin-form" novalidate>
+    <h3 id="club-admin-h">Club settings</h3>
+    <div id="club-admin-body"></div>
+    <div class="dialog-actions">
+      <div class="right"><button type="button" class="btn primary" data-close>Done</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settings" aria-labelledby="settings-h">
+  <form id="settings-form" novalidate>
+    <h3 id="settings-h">Settings</h3>
+    <div class="field">
+      <span class="label">Runtime format</span>
+      <div class="seg" role="group" aria-label="Runtime format" id="runtime-format" style="justify-self:start">
+        <button type="button" data-format="min">135 min</button>
+        <button type="button" data-format="hm">2h 15m</button>
+      </div>
+    </div>
+    <fieldset class="palettes" id="palettes"></fieldset>
+    <div class="custom-share">
+      <button class="btn small" type="button" id="custom-import-open">Import a palette</button>
+      <div class="custom-import" id="custom-import" hidden>
+        <input id="custom-import-text" autocomplete="off" placeholder="Paste a share link or color code" aria-label="Share link or color code">
+        <button class="btn small primary" type="button" id="custom-import-go">Add it</button>
+      </div>
+      <p class="note" id="custom-import-note" aria-live="polite"></p>
+    </div>
+    <div class="custom-editor" id="custom-editor" hidden>
+      <div class="field">
+        <label for="c-name">Palette name</label>
+        <input id="c-name" maxlength="40" autocomplete="off">
+      </div>
+      <span class="label">Colors</span>
+      <div class="custom-grid">
+        <label class="color-field"><input type="color" id="c-bg" data-key="bg"><span>Background<small>Behind everything</small></span></label>
+        <label class="color-field"><input type="color" id="c-surface" data-key="surface"><span>Cards<small>Boxes and panels</small></span></label>
+        <label class="color-field"><input type="color" id="c-fg" data-key="fg"><span>Text</span></label>
+        <label class="color-field"><input type="color" id="c-accent" data-key="accent"><span>Accent<small>Stars, buttons, tabs</small></span></label>
+        <label class="color-field"><input type="color" id="c-display" data-key="display"><span>Headings</span></label>
+      </div>
+      <p class="custom-warn" id="custom-warn" hidden></p>
+      <button class="link-btn" type="button" id="custom-reset" style="justify-self:start">Start over from Charcoal</button>
+      <div class="custom-share">
+        <button class="btn small" type="button" id="custom-copy">Copy share link</button>
+        <button class="btn small danger" type="button" id="custom-delete">Delete palette</button>
+        <div class="custom-import" id="custom-link" hidden>
+          <input id="custom-link-text" readonly aria-label="Share link">
+        </div>
+        <p class="note" id="custom-share-note" aria-live="polite"></p>
+      </div>
+    </div>
+    <p class="muted" style="margin:0;font-size:13px">These choices are saved on this device only and don't change the site for anyone else.</p>
+    <div class="field" id="settings-account" hidden>
+      <span class="label">This club</span>
+      <div class="custom-share">
+        <button class="btn small" type="button" id="btn-club-admin" hidden>Club settings</button>
+        <a class="btn small" href="./">Your clubs</a>
+        <button class="btn small danger" type="button" id="btn-leave">Leave this club</button>
+      </div>
+      <span class="label" style="margin-top:6px">Account</span>
+      <div class="custom-share">
+        <span class="muted" style="font-size:13px" id="settings-email"></span>
+        <button class="btn small" type="button" id="btn-signout">Sign out</button>
+        <button class="btn small danger" type="button" id="btn-delete-account">Delete my account</button>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <div class="right"><button type="submit" class="btn primary">Done</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="editor" aria-labelledby="editor-h">
+  <form id="editor-form" novalidate>
+    <h3 id="editor-h">Edit screening</h3>
+    <p class="muted" id="editor-when" style="margin:0"></p>
+    <div class="field" id="wl-field" hidden>
+      <span class="label">From your watchlist</span>
+      <ul class="search-results" id="wl-pick"></ul>
+    </div>
+    <div class="field" id="search-field">
+      <label for="f-search">Search for a film</label>
+      <input id="f-search" type="search" autocomplete="off" placeholder="Type a title">
+      <span class="help" id="search-help">Pick a result and everything below fills in.</span>
+      <ul class="search-results" id="search-results"></ul>
+    </div>
+    <div class="or-line" id="search-or">or</div>
+    <div class="field">
+      <label for="f-imdb">IMDb link</label>
+      <input id="f-imdb" autocomplete="off" placeholder="https://www.imdb.com/title/tt0118694/">
+      <span class="help" id="imdb-help">Paste the film's IMDb page link.</span>
+    </div>
+    <div class="field" id="poster-field" hidden>
+      <span class="label">Poster</span>
+      <div class="poster-pick">
+        <img class="poster" id="f-poster-img" alt="" referrerpolicy="no-referrer">
+        <div class="actions">
+          <button class="btn small" type="button" id="poster-more">Choose a different poster</button>
+          <span class="help" id="poster-help"></span>
+        </div>
+      </div>
+      <ul class="poster-grid" id="poster-grid" hidden></ul>
+    </div>
+    <div class="field">
+      <label for="f-title">Film title</label>
+      <input id="f-title" autocomplete="off" maxlength="120">
+    </div>
+    <div class="row2">
+      <div class="field"><label for="f-director">Director</label><input id="f-director" autocomplete="off" maxlength="120"></div>
+      <div class="field"><label for="f-genre">Genre</label><input id="f-genre" autocomplete="off" maxlength="120" placeholder="Horror, Thriller"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="f-mins">Runtime (minutes)</label><input id="f-mins" type="number" min="1" max="100000" inputmode="numeric"></div>
+      <div class="field"><label for="f-picker">Picked by</label><input id="f-picker" list="picker-list" autocomplete="off" maxlength="60"></div>
+    </div>
+    <datalist id="picker-list"></datalist>
+    <label class="check"><input type="checkbox" id="f-watched"> We've watched it</label>
+    <p class="form-error" id="editor-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="editor-clear">Clear film</button>
+      <div class="right">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<input type="file" id="party-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+<div class="party-drop" id="party-drop" hidden>Drop to add to the page</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>
+const CFG = window.MOVIE_CLUB || {};
+const PARAMS = new URLSearchParams(location.search);
+const CLUB_SLUG = PARAMS.get("c");      // ?c=<club> opens a club
+const JOIN_CODE = PARAMS.get("join");   // ?join=<invite code> opens the invite page
+const OMDB_KEY = CFG.omdbApiKey && !CFG.omdbApiKey.startsWith("PASTE") ? CFG.omdbApiKey : "";
+const TMDB_KEY = CFG.tmdbApiKey || "";
+// A palette shared by link (?palette=...). Read now, before the tab code rewrites the address.
+const SHARED_PALETTE = new URLSearchParams(location.search).get("palette");
+const SHARED_PALETTE_NAME = new URLSearchParams(location.search).get("name");
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Screening dates are calendar days ("2026-10-16"); keep them in UTC so they never shift a day.
+const dayNum = iso => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5;
+const fmt = (iso, opts) => new Date(dayNum(iso) * 864e5).toLocaleDateString("en-US", { timeZone: "UTC", ...opts });
+const fmtTs = (ts, opts) => new Date(ts).toLocaleDateString("en-US", opts);
+const today = (() => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 864e5; })();
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+let runtimeFormat = "min";            // "min" (135 min) or "hm" (2h 15m), saved per browser
+try { if (localStorage.getItem("mc-runtime") === "hm") runtimeFormat = "hm"; } catch (e) {}
+const runtime = m => {
+  if (!m) return "";
+  if (runtimeFormat === "hm") { const h = Math.floor(m / 60), r = m % 60; return h ? `${h.toLocaleString()}h${r ? ` ${r}m` : ""}` : `${r}m`; }
+  return m >= 600 ? `${Math.round(m / 60).toLocaleString()} hr` : `${m} min`;
+};
+const imdbUrl = id => `https://www.imdb.com/title/${id}/`;
+const stars = v => `<span class="stars" role="img" aria-label="${v.toFixed(1)} out of 5">★★★★★<span style="width:${(v / 5) * 100}%" aria-hidden="true">★★★★★</span></span>`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const hasPoster = s => s.poster && s.poster !== "none";
+const posterImg = (s, cls = "") => hasPoster(s) ? `<img class="poster ${cls}" src="${esc(s.poster)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "";
+const isPicker = (slot, name) => !!name && (slot.picker || "").split(/\s*&\s*/).includes(name);
+
+let toastTimer;
+// action: optional {label, run} shown as a button in the message (e.g. Undo).
+function toast(msg, action) {
+  const t = $("toast");
+  t.textContent = msg;
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-btn"; b.textContent = action.label;
+    b.addEventListener("click", () => { t.hidden = true; clearTimeout(toastTimer); action.run(); });
+    t.append(b);
+  }
+  t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, action ? 7000 : 3400);
+}
+function showStatus(title, body) {
+  $("status").hidden = false; $("content").hidden = true;
+  $("status").innerHTML = `<strong>${esc(title)}</strong>${esc(body)}`;
+}
+function openDialog(d) { d.showModal ? d.showModal() : d.setAttribute("open", ""); }
+function closeDialog(d) { d.close ? d.close() : d.removeAttribute("open"); }
+document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => closeDialog(b.closest("dialog"))));
+
+/* ---------- state ---------- */
+let sb = null;
+let members = [];   // [{name, pick_order}]
+let slots = null;   // [{date, title, ..., poster, ratings: {name: score}, reviews: {name: {text, at}}, missed: Set<name>}]
+let me = null;      // logged-in member's name in this club, or null
+let session = null;
+let club = null;    // {id, slug, name, schedule_note}
+let showAll = false;
+let sortMode = "newest";              // newest | highest | lowest | az
+let onlyUnrated = false;              // "Not rated by me" filter
+let criticsSort = "me";               // me | highest | lowest | rated | missed | az
+let schedFilter = "all";              // all | mine
+let tab = "next";
+const openFilms = new Set();          // expanded rows in the watched table
+const drafts = {};                    // unsaved review text, by film date
+let canReview = false, canPoster = false; // database has the review / poster columns
+let canMiss = false;                  // database has the absences table
+let canParty = false;                 // database has the stickers table
+let canVote = false;                  // database has the review_votes table
+let watchlist = [];                   // your own watchlist, newest first (private to you)
+let canWatchlist = false;             // database has the watchlist table
+let votes = new Map();                // "slot|author" -> {up, down, mine}
+let takesSort = "newest";             // newest | top
+let stickers = [];                    // [{id, path, tab, x, y, w, z, added_by}]
+let party = false;                    // this viewer's party mode switch (saved per browser)
+try { party = localStorage.getItem("mc-party") === "on"; } catch (e) {}
+let partyDrag = null;                 // the image being moved or resized, if any
+
+const critics = () => members.map(m => m.name);
+const isAdmin = () => !!me && members.some(m => m.name === me && m.role === "admin");
+const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) => a.pick_order - b.pick_order).map(m => m.name);
+
+/* ---------- data ---------- */
+async function load() {
+  const [m, s, r, a, st, rv] = await Promise.all([
+    sb.from("members").select("name, pick_order, role, user_id, created_at").eq("club_id", club.id).order("pick_order", { nullsFirst: false }).order("name"),
+    sb.from("slots").select("*").eq("club_id", club.id).order("date"),
+    sb.from("ratings").select("*").eq("club_id", club.id),
+    sb.from("absences").select("*").eq("club_id", club.id),
+    sb.from("stickers").select("*").eq("club_id", club.id).order("z"),
+    sb.from("review_votes").select("slot, author, voter, value").eq("club_id", club.id)
+  ]);
+  const err = m.error || s.error || r.error;
+  if (err) throw err;
+  canMiss = !a.error; // the absences table may not exist yet
+  canParty = !st.error;
+  stickers = st.data || [];
+  canVote = !rv.error;
+  votes = new Map();
+  (rv.data || []).forEach(v => {
+    const k = `${v.slot}|${v.author}`;
+    const e = votes.get(k) || { up: 0, down: 0, by: {} };
+    if (v.value > 0) e.up++; else e.down++;
+    e.by[v.voter] = v.value;
+    votes.set(k, e);
+  });
+  members = m.data;
+  me = members.find(x => session && x.user_id === session.user.id)?.name || null;
+  canPoster = s.data.length > 0 && "poster" in s.data[0];
+  canReview = r.data.length > 0 && "review" in r.data[0];
+  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {}, missed: new Set() }]));
+  (a.data || []).forEach(x => byDate.get(x.slot)?.missed.add(x.member));
+  r.data.forEach(x => {
+    const sl = byDate.get(x.slot); if (!sl) return;
+    sl.ratings[x.member] = x.score;
+    if (x.review) sl.reviews[x.member] = { text: x.review, at: x.updated_at };
+  });
+  slots = [...byDate.values()];
+  await signPartyUrls();
+}
+// Your watchlist. Row-level security only ever returns your own rows.
+async function loadWatchlist() {
+  if (!me) { watchlist = []; return; }
+  const { data, error } = await sb.from("watchlist").select("*").order("added_at", { ascending: false });
+  canWatchlist = !error;
+  watchlist = data || [];
+}
+let reloadTimer;
+function scheduleReload() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => load().then(loadWatchlist).then(() => { render(); if (adminOpen()) renderClubAdmin(); }).catch(() => {}), 250);
+}
+
+// Run a write, then refresh. Explains refusals in plain words.
+async function write(op, okMsg) {
+  if (!me) { signIn(); return false; }
+  const { error } = await op();
+  if (error) {
+    if (error.code === "P0001") toast(error.message);
+    else if (error.code === "42501" || /row-level security/i.test(error.message)) toast("That change isn't allowed for your account.");
+    else if (error.code === "23514") toast("That's too long. Keep reviews under 200 characters.");
+    else if (/JWT|session/i.test(error.message)) { toast("You've been signed out. Sign in again."); signIn(); }
+    else toast("That change didn't save. Check your connection and try again.");
+    scheduleReload();
+    return false;
+  }
+  if (okMsg) toast(okMsg);
+  scheduleReload();
+  return true;
+}
+
+/* ---------- derived ---------- */
+function derive() {
+  const C = critics();
+  const ordered = [...slots].sort((a, b) => a.date.localeCompare(b.date));
+  const watched = ordered.filter(s => s.watched && s.title).map(s => {
+    const vals = C.map(c => s.ratings[c] || 0);
+    return { ...s, vals, avg: mean(vals.filter(v => v > 0)) };
+  });
+  const upcoming = ordered.filter(s => !s.watched);
+  return { C, ordered, watched, upcoming, next: upcoming[0] || null };
+}
+
+/* ---------- tabs ---------- */
+const TABS = ["next", "schedule", "ratings", "critics"];
+function setTab(t, { scroll = true } = {}) {
+  if (!TABS.includes(t)) t = "next";
+  tab = t;
+  TABS.forEach(x => {
+    const b = $("tab-" + x);
+    b.setAttribute("aria-selected", x === t ? "true" : "false");
+    b.tabIndex = x === t ? 0 : -1;
+    $("panel-" + x).hidden = x !== t;
+  });
+  try { history.replaceState(null, "", location.pathname + location.search + (t === "next" ? "" : "#" + t)); } catch (e) {}
+  renderParty();
+  if (scroll) {
+    const nav = $("tabs");
+    if (nav.getBoundingClientRect().top < 0) window.scrollTo({ top: nav.offsetTop, behavior: "instant" });
+  }
+}
+$("home-link").addEventListener("click", e => {
+  if (!club) return;
+  e.preventDefault();
+  setTab("next", { scroll: false });
+  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+$("tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
+$("tabs").addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const i = TABS.indexOf(tab), n = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+  setTab(n); $("tab-" + n).focus();
+});
+setTab(location.hash.slice(1), { scroll: false });
+
+/* ---------- render ---------- */
+function renderAccount() {
+  $("account").innerHTML = !session
+    ? `<button class="btn primary small" type="button" id="btn-login">Sign in</button>`
+    : club
+      ? `${me ? `<span>You're <span class="me">${esc(me)}</span></span>` : ""}<a class="link-btn" href="./">Your clubs</a>`
+      : `<button class="link-btn" type="button" id="btn-signout-top">Sign out</button>`;
+  $("btn-login")?.addEventListener("click", signIn);
+  $("btn-signout-top")?.addEventListener("click", signOut);
+
+}
+
+function render() {
+  // Keep a half-typed review and its cursor through live refreshes.
+  const active = document.activeElement;
+  const keep = active && active.dataset && active.dataset.review ? { id: active.id, pos: active.selectionStart } : null;
+
+  renderAccount();
+  if (!slots) return;
+  if (!slots.length) {
+    showStatus("No screenings on the calendar yet.", isAdmin() ? "Add your club's first dates in Club settings." : "Once a club admin adds dates, they show up here.");
+    if (isAdmin()) $("status").insertAdjacentHTML("beforeend", `<p><button class="btn primary" type="button" id="status-admin">Open Club settings</button></p>`);
+    $("status-admin")?.addEventListener("click", openClubAdmin);
+    return;
+  }
+  $("status").hidden = true; $("content").hidden = false;
+  const D = derive();
+  renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D);
+  $("sched-note").textContent = club.schedule_note || "Picks rotate in the pick order below.";
+  renderSchedule(D); renderWatchlist(); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
+  renderParty();
+
+  if (popFor && !popFor.isConnected) hidePop();
+  if (keep) { const el = $(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (e) {} } }
+}
+
+function renderTagline({ ordered, watched }) {
+  const totalMins = watched.reduce((s, f) => s + (f.mins || 0), 0);
+  const clubAvg = mean(watched.filter(f => f.avg != null).map(f => f.avg));
+  $("tagline").innerHTML = [
+    `<span><b>${pickOrder().length}</b> members</span>`,
+    `<span><b>${watched.length}</b> films watched</span>`,
+    `<span><b class="num">${Math.floor(totalMins / 60)}h ${totalMins % 60}m</b>&nbsp; of screen time</span>`,
+    clubAvg != null ? `<span>Club average <b class="num">${clubAvg.toFixed(2)}</b></span>` : "",
+    `<span>Since ${fmt(ordered[0].date, { month: "short", day: "numeric", year: "numeric" })}</span>`
+  ].join("");
+}
+
+function renderTurn({ watched, upcoming }) {
+  const el = $("turn");
+  if (!me) { el.hidden = true; return; }
+  const parts = [];
+  const unrated = watched.filter(f => !f.ratings[me] && !f.missed.has(me)).sort((a, b) => b.date.localeCompare(a.date));
+  if (unrated.length) {
+    const shown = unrated.slice(0, 3);
+    parts.push(`<span class="item"><span>Rate:</span>${shown.map(f => `<button class="chip-btn" type="button" data-act="goto" data-id="${f.date}">${esc(f.title)}</button>`).join("")}${unrated.length > 3 ? `<button class="link-btn" type="button" data-act="goto-tab" data-id="ratings">+${unrated.length - 3} more</button>` : ""}</span>`);
+  }
+  const mine = upcoming.find(s => isPicker(s, me));
+  if (mine) {
+    const when = fmt(mine.date, { weekday: "short", month: "short", day: "numeric" });
+    parts.push(mine.title
+      ? `<span class="item">Your next pick: <b>${esc(mine.title)}</b> · ${when} <button class="chip-btn" type="button" data-act="edit" data-id="${mine.date}">Change it</button></span>`
+      : `<span class="item">Your pick for <b>${when}</b> isn't in yet <button class="btn primary small" type="button" data-act="edit" data-id="${mine.date}">Pick your next movie</button></span>`);
+  }
+  // The Schedule tab's button opens the same slot.
+  const pick = $("pick-next");
+  pick.hidden = !mine;
+  if (mine) { pick.dataset.act = "edit"; pick.dataset.id = mine.date; pick.textContent = mine.title ? "Change your next pick" : "Pick your next movie"; }
+  el.hidden = !parts.length;
+  el.innerHTML = `<span class="label">Your turn</span>${parts.join(`<span class="sep" aria-hidden="true"></span>`)}`;
+}
+
+function renderTicket({ next }) {
+  if (!next) { $("ticket").innerHTML = `<div class="ticket-main"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
+  const diff = dayNum(next.date) - today;
+  const countdown = diff === 0 ? "Tonight" : diff === 1 ? "Tomorrow" : diff > 1 ? `In ${diff} days` : `Scheduled ${plural(-diff, "day")} ago`;
+  const poster = posterImg(next);
+  $("ticket").className = "ticket" + (poster ? " has-poster" : "");
+  $("ticket").innerHTML = `
+    ${poster ? `<div class="ticket-poster">${poster}</div>` : ""}
+    <div class="ticket-main">
+        <span class="label">Admit one</span>
+        ${next.title
+          ? `<h3 class="title">${esc(next.title)}</h3>
+             <dl class="facts">
+               ${next.director ? `<div><dt>Director</dt><dd>${esc(next.director)}</dd></div>` : ""}
+               ${next.genre ? `<div><dt>Genre</dt><dd>${esc(next.genre)}</dd></div>` : ""}
+               ${next.mins ? `<div><dt>Runtime</dt><dd class="num">${runtime(next.mins)}</dd></div>` : ""}
+               <div><dt>Picked by</dt><dd>${esc(next.picker)}</dd></div>
+             </dl>`
+          : `<h3 class="title tba">Pick not in yet</h3><p class="muted" style="margin:0">It's ${esc(next.picker)}'s turn to choose.</p>`}
+        ${next.imdb ? `<div class="actions"><a class="btn primary" href="${imdbUrl(esc(next.imdb))}" target="_blank" rel="noopener">View on IMDb ↗</a></div>` : ""}
+        ${me ? `<div class="actions">
+          ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
+          <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${next.title ? "Edit" : "Add the film"}</button>
+        </div>` : ""}
+    </div>
+    <div class="stub">
+      <span class="label">${fmt(next.date, { weekday: "long" })}</span>
+      <span class="day">${fmt(next.date, { day: "numeric" })}</span>
+      <span class="when">${fmt(next.date, { month: "long", year: "numeric" })}</span>
+      <span class="countdown">${countdown}</span>
+    </div>`;
+}
+
+const TAKES_STEP = 6;
+let takesShown = TAKES_STEP;
+function renderTakes({ watched }) {
+  const all = [];
+  watched.forEach(f => Object.entries(f.reviews).forEach(([name, r]) => all.push({ f, name, ...r, score: f.ratings[name] })));
+  const tally = t => votes.get(`${t.f.date}|${t.name}`) || { up: 0, down: 0, by: {} };
+  all.forEach(t => { const v = tally(t); t.up = v.up; t.down = v.down; t.net = v.up - v.down; t.myVote = me ? v.by[me] || 0 : 0; });
+  const newest = (a, b) => (b.at || "").localeCompare(a.at || "");
+  all.sort(takesSort === "top" && canVote ? (a, b) => b.net - a.net || b.up - a.up || newest(a, b) : newest);
+  $("takes-section").hidden = !canReview;
+  $("takes-controls").hidden = !canVote || all.length < 2;
+  $("takes-sort").querySelectorAll("[data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === takesSort ? "true" : "false"));
+  const shown = Math.min(takesShown, all.length);
+  const left = all.length - shown;
+  $("takes-more").hidden = left <= 0;
+  $("takes-more").textContent = `Show ${Math.min(TAKES_STEP, left)} more`;
+  $("takes-less").hidden = shown <= TAKES_STEP;
+  $("takes-count").textContent = all.length > TAKES_STEP ? `Showing ${shown} of ${all.length}` : "";
+  $("takes").innerHTML = all.length
+    ? all.slice(0, shown).map(t => `
+      <li class="take">
+        <div class="who"><span>${esc(t.name)}</span>${t.score ? stars(t.score) : ""}</div>
+        <q>${esc(t.text)}</q>
+        <div class="foot">
+          <button class="link-btn film" type="button" data-act="goto" data-id="${t.f.date}">on ${esc(t.f.title)}</button>
+          ${canVote ? voteControl(t) : ""}
+        </div>
+      </li>`).join("")
+    : `<li class="muted">No reviews yet. After the next screening, open a film in the Ratings tab and add a line with your stars.</li>`;
+}
+
+// ▲ score ▼ for a review. You can't vote on your own; logged-out viewers see the score only.
+let openVoters = null; // "slot|author" whose voter list is showing
+function voteControl(t) {
+  const own = t.name === me, off = !me || own;
+  const tip = !me ? "Log in to vote" : own ? "You can't vote on your own take" : "";
+  const key = `${t.f.date}|${t.name}`;
+  const cls = `net num ${t.net > 0 ? "pos" : t.net < 0 ? "neg" : ""}`;
+  const score = `${t.net > 0 ? "+" : ""}${t.net}`;
+  // On any take with votes, hovering the score shows who voted.
+  const canSee = (t.up + t.down) > 0;
+  let net = `<span class="${cls}" title="${t.up} up · ${t.down} down">${score}</span>`, pop = "";
+  if (canSee) {
+    const open = openVoters === key;
+    net = `<button type="button" class="${cls} net-btn" data-voters="${esc(key)}" aria-expanded="${open}" aria-label="${t.up} up, ${t.down} down. Who voted">${score}</button>`;
+    const by = (votes.get(key) || { by: {} }).by;
+    const ups = Object.keys(by).filter(n => by[n] > 0).sort(), downs = Object.keys(by).filter(n => by[n] < 0).sort();
+    pop = `<span class="voters-pop${open ? " open" : ""}" role="tooltip">
+      ${ups.length ? `<span class="up-l"><b>▲</b> ${ups.map(esc).join(", ")}</span>` : ""}
+      ${downs.length ? `<span class="down-l"><b>▼</b> ${downs.map(esc).join(", ")}</span>` : ""}
+    </span>`;
+  }
+  return `<span class="votes" role="group" aria-label="Votes for ${esc(t.name)}'s take"${tip && !canSee ? ` title="${tip}"` : ""}>
+    <button type="button" class="up" data-vote="1" data-slot="${t.f.date}" data-author="${esc(t.name)}" aria-label="Upvote" aria-pressed="${t.myVote === 1}"${off ? " disabled" : ""}>▲</button>
+    ${net}
+    <button type="button" class="down" data-vote="-1" data-slot="${t.f.date}" data-author="${esc(t.name)}" aria-label="Downvote" aria-pressed="${t.myVote === -1}"${off ? " disabled" : ""}>▼</button>
+    ${pop}
+  </span>`;
+}
+// Open or close the voter list; any other click closes it.
+const touchOnly = matchMedia("(hover: none)");
+document.addEventListener("click", e => {
+  if (!touchOnly.matches && !openVoters) return;
+  const b = e.target.closest("[data-voters]");
+  const next = b ? (openVoters === b.dataset.voters ? null : b.dataset.voters) : null;
+  if (next === openVoters || (!b && e.target.closest(".voters-pop"))) return;
+  openVoters = next;
+  render();
+});
+
+const SHOWN = 12;
+const RATE_WITHIN_DAYS = 7;
+function renderSchedule({ upcoming }) {
+  // "My picks": every upcoming date that's yours (the next screening included), all at once.
+  const mineOnly = schedFilter === "mine" && !!me;
+  const mine = upcoming.filter(f => isPicker(f, me));
+  $("sched-controls").hidden = !me;
+  $("sched-filter").querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", b.dataset.filter === (mineOnly ? "mine" : "all") ? "true" : "false"));
+  $("sched-count").textContent = mineOnly ? `${plural(mine.length, "pick")} coming up · ${mine.filter(f => !f.title).length} still to choose` : "";
+  const list = mineOnly ? mine : showAll ? upcoming : upcoming.slice(0, SHOWN);
+  if (mineOnly && !list.length) {
+    $("schedule").innerHTML = `<li class="muted">You don't have any upcoming picks on the calendar.</li>`;
+    $("sched-toggle").hidden = true;
+    return;
+  }
+  $("schedule").innerHTML = list.map(f => slotCard(f, f === upcoming[0])).join("");
+  const tog = $("sched-toggle");
+  tog.hidden = mineOnly || upcoming.length <= SHOWN;
+  if (upcoming.length) tog.textContent = showAll ? "Show fewer dates" : `Show all ${upcoming.length} dates through ${fmt(upcoming[upcoming.length - 1].date, { month: "short", year: "numeric" })}`;
+  // Next up tab: the three screenings after the next one.
+  const soon = upcoming.slice(1, 4);
+  $("soon").hidden = !soon.length;
+  $("soon-list").innerHTML = soon.map(f => slotCard(f, false)).join("");
+}
+
+function slotCard(f, isNext) {
+  return `
+    <li class="slot ${isPicker(f, me) ? "mine" : ""} ${isNext ? "is-next" : ""}">
+      <div class="date"><div class="m">${fmt(f.date, { month: "short" })}</div><div class="d">${fmt(f.date, { day: "numeric" })}</div></div>
+      <div>
+        ${isNext ? `<span class="next-tag">Next up</span>` : ""}
+        ${f.title
+          ? `<div class="film">${f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title)}</div>`
+          : `<div class="film tba">Pick not in yet</div>`}
+        <div class="who">${fmt(f.date, { weekday: "short" })} · ${esc(f.picker)}'s pick${f.mins ? ` · <span class="num">${runtime(f.mins)}</span>` : ""}</div>
+        ${me ? `<button class="link-btn edit" type="button" data-act="edit" data-id="${f.date}">${f.title ? "Edit" : "Add film"}</button>` : ""}
+      </div>
+      <div>${posterImg(f)}</div>
+    </li>`;
+}
+
+function renderOrder({ next }) {
+  const order = pickOrder();
+  const up = next ? next.picker : "";
+  $("order").innerHTML = order.map((m, i) => `<li class="${m === up ? "up" : ""}"><span class="n">${i + 1}</span><span class="who">${esc(m)}</span></li>`).join("");
+  const guests = critics().filter(c => !order.includes(c));
+  $("order-note").textContent = next
+    ? `${next.picker} has the current pick.${guests.length ? ` ${guests.join(", ")} ${guests.length > 1 ? "rate as guests and aren't" : "rates as a guest and isn't"} in the rotation.` : ""}`
+    : "";
+}
+
+const sorters = {
+  newest: (a, b) => b.date.localeCompare(a.date),
+  highest: (a, b) => (b.avg ?? -1) - (a.avg ?? -1) || b.date.localeCompare(a.date),
+  lowest: (a, b) => (a.avg ?? 99) - (b.avg ?? 99) || b.date.localeCompare(a.date),
+  az: (a, b) => a.title.localeCompare(b.title)
+};
+function renderWatched({ C, watched }) {
+  const latest = watched[watched.length - 1];
+  $("unwatch-note").hidden = !(me && latest);
+  if (me && latest) $("unwatch-note").innerHTML = `Latest watched: <b>${esc(latest.title)}</b> (${fmt(latest.date, { month: "short", day: "numeric" })}). Marked by mistake? <button class="link-btn" type="button" data-act="unwatch" data-id="${latest.date}">Move it back to Next up</button>`;
+  const rated = watched.filter(f => f.avg != null);
+  if (rated.length) {
+    const best = rated.reduce((a, b) => (b.avg > a.avg ? b : a));
+    const worst = rated.reduce((a, b) => (b.avg < a.avg ? b : a));
+    $("top-bottom").innerHTML = `Top: <b>${esc(best.title)}</b> ${best.avg.toFixed(1)} · Bottom: <b>${esc(worst.title)}</b> ${worst.avg.toFixed(1)}`;
+  } else $("top-bottom").innerHTML = "";
+  $("watched-sub").textContent = `Tap a film for everyone's take.${canMiss ? ` Unrated after ${RATE_WITHIN_DAYS} days counts as missed.` : ""}`;
+
+  // Controls
+  document.querySelectorAll("#watch-sort [data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === sortMode ? "true" : "false"));
+  $("unrated-toggle").hidden = !me;
+  if (!me) onlyUnrated = false;
+  $("only-unrated").checked = onlyUnrated;
+
+  const list = watched.filter(f => !onlyUnrated || (!f.ratings[me] && !f.missed.has(me))).sort(sorters[sortMode]);
+  $("watch-count").textContent = onlyUnrated ? `${plural(list.length, "film")} to rate` : plural(list.length, "film");
+  if (!list.length) {
+    $("films").innerHTML = `<li class="muted">${onlyUnrated ? "You've rated everything you saw." : "Nothing watched yet."}</li>`;
+    return;
+  }
+
+  $("films").innerHTML = list.map(f => {
+    const open = openFilms.has(f.date);
+    const mine = f.ratings[me] || 0;
+    const nReviews = Object.keys(f.reviews).length;
+    // Club rating meter: knob sits at the average on a 1-5 scale, ringed in that score's color.
+    const nRated = f.vals.filter(Boolean).length;
+    const meter = f.avg != null
+      ? `<div class="meter-row">
+           <div class="meter" role="meter" aria-label="Club rating" aria-valuemin="1" aria-valuemax="5" aria-valuenow="${f.avg.toFixed(1)}">
+             <span class="knob" style="left:${((f.avg - 1) / 4) * 100}%; --ring:${RATING[Math.round(f.avg)][0]}"></span>
+           </div>
+           <span class="meter-score"><b>${f.avg.toFixed(1)}</b><small>Club · ${plural(nRated, "rating")}</small></span>
+         </div>`
+      : `<div class="meter-row"><div class="meter empty" aria-hidden="true"></div><span class="meter-score"><small>No ratings yet</small></span></div>`;
+    const rate = me ? `
+      <div class="my-rating">
+        <span>Your rating</span>
+        <span class="rate" role="group" aria-label="Your rating for ${esc(f.title)}">${[1, 2, 3, 4, 5].map(n =>
+          `<button type="button" class="${n <= mine ? "on" : ""}" data-act="rate" data-id="${f.date}" data-v="${n}" aria-label="${n} star${n > 1 ? "s" : ""}" aria-pressed="${n === mine}">★</button>`).join("")}</span>
+        ${!mine && f.missed.has(me) ? `<span>You missed this one</span>` : ""}
+      </div>` : "";
+    const meta = [fmt(f.date, { month: "short", day: "numeric" }), `${f.picker}'s pick`, runtime(f.mins)].filter(Boolean).map(esc).join(" · ");
+    return `
+    <li class="film-row ${open ? "open" : ""}" id="film-${f.date}">
+      ${posterImg(f) || `<span class="poster-slot" aria-hidden="true"></span>`}
+      <button class="film-hit" type="button" data-act="expand" data-id="${f.date}" aria-expanded="${open}">
+        <span>
+          <span class="t">${esc(f.title)}</span>
+          <span class="meta">${meta}</span>
+          <span class="more">${open ? "Hide details" : nReviews ? `${plural(nReviews, "review")} · show details` : "Show details"}</span>
+        </span>
+      </button>
+      ${meter}
+      ${rate}
+      ${open ? `<div class="film-detail">${renderDetail(f, C)}</div>` : ""}
+    </li>`;
+  }).join("");
+}
+
+function renderDetail(f, C) {
+  const entries = C.filter(c => f.ratings[c]).map(c => ({ name: c, score: f.ratings[c], text: f.reviews[c]?.text || "" }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  const list = entries.length
+    ? `<ul class="detail-takes">${entries.map(e => {
+        let vote = "";
+        if (canVote && e.text) {
+          const v = votes.get(`${f.date}|${e.name}`) || { up: 0, down: 0, by: {} };
+          vote = voteControl({ f, name: e.name, up: v.up, down: v.down, net: v.up - v.down, myVote: me ? v.by[me] || 0 : 0 });
+        }
+        return `<li><span class="name">${esc(e.name)}</span>${stars(e.score)}<span class="text ${e.text ? "" : "muted"}">${e.text ? esc(e.text) : canReview ? "No review" : ""}</span>${vote}</li>`;
+      }).join("")}</ul>`
+    : `<p class="muted" style="margin:0">Nobody has rated this yet.</p>`;
+  const missedNames = C.filter(c => f.missed.has(c));
+  const missedLine = missedNames.length ? `<p class="missed-line">Missed it: <b>${missedNames.map(esc).join(", ")}</b></p>` : "";
+  let attend = "";
+  if (me && canMiss) {
+    attend = f.missed.has(me)
+      ? `<div class="attend"><span class="muted">You missed this screening.</span><button class="link-btn" type="button" data-act="missed" data-id="${f.date}">I was there after all</button></div>`
+      : `<div class="attend"><button class="btn small" type="button" data-act="missed" data-id="${f.date}">I missed this one</button></div>`;
+  }
+  let form = "";
+  if (me && canReview) {
+    const mine = f.ratings[me];
+    const val = drafts[f.date] ?? f.reviews[me]?.text ?? "";
+    form = mine
+      ? `<div class="review-form">
+           <input id="review-${f.date}" data-review="${f.date}" maxlength="200" placeholder="Your one-line take on ${esc(f.title)}" value="${esc(val)}" aria-label="Your review of ${esc(f.title)}">
+           <button class="btn small primary" type="button" data-act="review" data-id="${f.date}">Save review</button>
+         </div>`
+      : f.missed.has(me) ? "" : `<p class="muted" style="margin:12px 0 0">Give it stars first, then you can add a review.</p>`;
+  }
+  const links = [f.director ? `Directed by ${esc(f.director)}` : "", esc(f.genre || ""),
+    f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">IMDb ↗</a>` : ""].filter(Boolean).join(" · ");
+  return `${links ? `<p class="links">${links}</p>` : ""}${list}${missedLine}${form}${attend}`;
+}
+
+// Rating colors (SeriesGraph style): [background, text, label]. Same in every palette.
+const RATING = {
+  5: ["#289e47", "#000000", "Awesome"],
+  4: ["#6dd674", "#000000", "Great"],
+  3: ["#f4d03f", "#2a2205", "Good"],
+  2: ["#f39c12", "#2a1802", "Average"],
+  1: ["#e74c3c", "#1a0a08", "Bad"]
+};
+const shade = v => `background: ${RATING[v][0]}; color: ${RATING[v][1]}`;
+function renderGrid({ C, watched }) {
+  $("legend").innerHTML = [5, 4, 3, 2, 1].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v} ${RATING[v][2]}</span>`).join("") + `<span class="chip">· = didn't rate</span>` + (canMiss ? `<span class="chip">MISSED = missed the screening</span>` : "");
+  const rows = [...watched].sort((a, b) => b.date.localeCompare(a.date));
+  // data-col ties each cell to its column so the crosshair can highlight it; "me" marks your own column.
+  const mc = i => (C[i] === me ? " me" : "");
+  $("grid").innerHTML = `
+    <thead><tr><th class="film corner">Film</th>${C.map((c, i) => `<th scope="col" data-col="${i}" class="${mc(i).trim()}">${esc(c)}</th>`).join("")}<th scope="col" data-col="${C.length}">Avg</th></tr></thead>
+    <tbody>${rows.map(f => `
+      <tr><th class="film" scope="row">${esc(f.title)}</th>
+        ${f.vals.map((v, i) => v ? `<td data-col="${i}" class="${mc(i).trim()}" style="${shade(v)}">${v}</td>`
+          : f.missed.has(C[i]) ? `<td data-col="${i}" class="missed${mc(i)}" title="${esc(C[i])} missed this screening">Missed</td>`
+          : `<td data-col="${i}" class="blank${mc(i)}" aria-label="not rated">·</td>`).join("")}
+        <td data-col="${C.length}" class="avg">${f.avg != null ? f.avg.toFixed(1) : "–"}</td></tr>`).join("")}
+    </tbody>`;
+  gridHover = null;
+}
+
+// Crosshair: highlight the hovered cell's row and column.
+let gridHover = null;
+function setGridHover(cell) {
+  const grid = $("grid");
+  grid.querySelectorAll(".hrow, .hcol, .hcell").forEach(e => e.classList.remove("hrow", "hcol", "hcell"));
+  gridHover = cell;
+  if (!cell) return;
+  const tr = cell.closest("tr"), col = cell.dataset.col;
+  if (tr.parentElement.tagName === "TBODY") tr.querySelectorAll("th, td").forEach(e => e.classList.add("hrow"));
+  if (col != null) grid.querySelectorAll(`[data-col="${col}"]`).forEach(e => e.classList.add("hcol"));
+  if (cell.tagName === "TD") cell.classList.add("hcell");
+}
+$("grid").addEventListener("pointerover", e => {
+  const cell = e.target.closest("td, th");
+  if (cell && cell !== gridHover) setGridHover(cell);
+});
+$("grid").addEventListener("pointerleave", () => setGridHover(null));
+
+function renderMembers({ C, watched }) {
+  const fmtD = d => (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(1);
+  // Everyone's ratings by name, for comparing tastes.
+  const byName = Object.fromEntries(C.map((name, ci) => [name, new Map(watched.filter(f => f.vals[ci] > 0).map(f => [f.date, f.vals[ci]]))]));
+
+  const cards = C.map((name, ci) => {
+    const missed = watched.filter(f => f.missed.has(name)).length;
+    const rated = watched.filter(f => f.vals[ci] > 0).map(f => ({ f, v: f.vals[ci], d: f.vals[ci] - f.avg }));
+    const card = { name, missed, count: rated.length, avg: rated.length ? mean(rated.map(r => r.v)) : null };
+    if (!rated.length) return card;
+
+    card.spread = [1, 2, 3, 4, 5].map(n => rated.filter(r => r.v === n).length);
+    // The films behind each bar, newest first.
+    card.films = [1, 2, 3, 4, 5].map(n => rated.filter(r => r.v === n).map(r => r.f).sort((a, b) => b.date.localeCompare(a.date)));
+    card.delta = mean(rated.map(r => r.d));
+    // Favorite: highest rating, tie-broken by how much more they liked it than the club. Least favorite: the reverse.
+    card.fav = [...rated].sort((a, b) => b.v - a.v || b.d - a.d)[0];
+    card.least = [...rated].sort((a, b) => a.v - b.v || a.d - b.d)[0];
+    if (card.least.f === card.fav.f) card.least = null;
+    // Hot take: furthest from the club on a film at least 3 people rated.
+    const contested = rated.filter(r => r.f.vals.filter(Boolean).length >= 3);
+    card.hot = contested.length ? contested.reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a)) : null;
+    if (card.hot && Math.abs(card.hot.d) < 1) card.hot = null;
+
+    // Their picks and how the club rated them.
+    const picks = watched.filter(f => isPicker(f, name) && f.avg != null);
+    card.picks = { n: watched.filter(f => isPicker(f, name)).length, avg: picks.length ? mean(picks.map(f => f.avg)) : null };
+
+    // Taste twin and opposite: average gap on films both rated (at least 3 in common).
+    const mine = byName[name];
+    const gaps = C.filter(o => o !== name).map(o => {
+      const shared = [...mine.keys()].filter(d => byName[o].has(d));
+      return shared.length >= 3 ? { o, gap: mean(shared.map(d => Math.abs(mine.get(d) - byName[o].get(d)))), n: shared.length } : null;
+    }).filter(Boolean).sort((a, b) => a.gap - b.gap);
+    card.twin = gaps[0] || null;
+    card.opposite = gaps.length > 1 ? gaps[gaps.length - 1] : null;
+
+    // Favorite genre: best average across genres they've rated at least twice.
+    const g = {};
+    rated.forEach(r => (r.f.genre || "").split(/\s*,\s*/).filter(Boolean).forEach(x => (g[x] = g[x] || []).push(r.v)));
+    const genres = Object.entries(g).filter(([, v]) => v.length >= 2).map(([k, v]) => ({ k, avg: mean(v), n: v.length }))
+      .sort((a, b) => b.avg - a.avg || b.n - a.n);
+    card.genre = genres[0] || null;
+
+    // Latest review.
+    const reviews = rated.filter(r => r.f.reviews[name]).map(r => ({ f: r.f, ...r.f.reviews[name] }))
+      .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    card.reviews = reviews.length;
+    card.latest = reviews[0] || null;
+    return card;
+  });
+  // Sort: "You first" (the default when logged in) puts your card first, then everyone by average.
+  const mode = criticsSort === "me" && !me ? "highest" : criticsSort;
+  const byAvg = (a, b) => (b.avg ?? -1) - (a.avg ?? -1);
+  const sorters = {
+    me: (a, b) => (b.name === me) - (a.name === me) || byAvg(a, b),
+    highest: byAvg,
+    lowest: (a, b) => (a.avg ?? 99) - (b.avg ?? 99),
+    rated: (a, b) => b.count - a.count || byAvg(a, b),
+    missed: (a, b) => b.missed - a.missed || a.name.localeCompare(b.name),
+    az: (a, b) => a.name.localeCompare(b.name)
+  };
+  cards.sort(sorters[mode]);
+  $("critics-sort-me").hidden = !me;
+  $("critics-sort").querySelectorAll("[data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === mode ? "true" : "false"));
+
+  const extreme = (label, r) => r ? `
+    <div class="extreme ${hasPoster(r.f) ? "" : "no-poster"}">
+      ${posterImg(r.f)}
+      <div><div class="label">${label}</div><div class="t">${esc(r.f.title)}</div><div class="v">${r.v}★ · club ${r.f.avg.toFixed(1)}</div></div>
+    </div>` : "";
+
+  $("members").innerHTML = cards.map(c => {
+    const head = `
+      <div class="member-head">
+        <div>
+          <div class="name">${esc(c.name)}</div>
+          <div class="sub">${c.count ? `Rated ${c.count} of ${watched.length}` : "No ratings yet"}${canMiss ? ` · Missed ${c.missed}` : ""}${c.reviews ? ` · ${plural(c.reviews, "review")}` : ""}</div>
+        </div>
+        ${c.avg != null ? `<div class="score-big"><span class="avg">${c.avg.toFixed(2)}</span>${stars(c.avg)}</div>` : ""}
+      </div>`;
+    if (c.avg == null) return `<article class="member ${c.name === me ? "me" : ""}">${head}</article>`;
+    const top = Math.max(...c.spread, 1);
+    // Each bar lists its films on hover (or tap, which focuses it).
+    const spread = `
+      <div class="spread" role="group" aria-label="Ratings given">
+        ${c.spread.map((n, i) => {
+          const films = c.films[i];
+          const pop = n ? `<div class="spread-pop"><div class="inner"><div class="h">${i + 1}★ · ${plural(n, "film")}</div><ul>${films.map(f => `<li><span>${esc(f.title)}</span><span class="club"><b style="color:${RATING[Math.min(5, Math.max(1, Math.round(f.avg)))][0]}">${f.avg.toFixed(1)}</b></span><span class="dt">${fmt(f.date, { month: "short", day: "numeric" })}</span></li>`).join("")}</ul></div></div>` : "";
+          return `<div class="col ${n ? "has" : ""}"${n ? ` tabindex="0"` : ""} aria-label="${n} at ${i + 1} star${i ? "s" : ""}${n ? `: ${esc(films.map(f => f.title).join(", "))}` : ""}"><span class="n">${n}</span><div class="track"><div class="fill" style="height:${(n / top) * 100}%; background:${RATING[i + 1][0]}"></div></div><span class="k">${i + 1}★</span>${pop}</div>`;
+        }).join("")}
+      </div>`;
+    const rows = [
+      [`vs. the room`, `${fmtD(c.delta)} <small>${c.delta >= 0.05 ? "kinder than average" : c.delta <= -0.05 ? "harsher than average" : "right in step"}</small>`],
+      c.picks.n ? [`Their picks`, `${c.picks.n} film${c.picks.n === 1 ? "" : "s"}${c.picks.avg != null ? ` <small>· club gave them ${c.picks.avg.toFixed(1)}</small>` : ""}`] : null,
+      c.twin ? [`Taste twin`, `${esc(c.twin.o)} <small>· ${c.twin.gap.toFixed(1)}★ apart over ${c.twin.n}</small>`] : null,
+      c.opposite ? [`Opposite`, `${esc(c.opposite.o)} <small>· ${c.opposite.gap.toFixed(1)}★ apart over ${c.opposite.n}</small>`] : null,
+      c.genre ? [`Favorite genre`, `${esc(c.genre.k)} <small>· ${c.genre.avg.toFixed(1)} over ${c.genre.n}</small>`] : null,
+      c.hot ? [`Hot take`, `${esc(c.hot.f.title)} <small>· gave ${c.hot.v}★, club ${c.hot.f.avg.toFixed(1)}</small>`] : null
+    ].filter(Boolean);
+    return `
+      <article class="member ${c.name === me ? "me" : ""}">
+        ${head}
+        ${spread}
+        <div class="extremes">${extreme("Favorite", c.fav)}${extreme("Least favorite", c.least)}</div>
+        <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+        ${c.latest ? `<blockquote>“${esc(c.latest.text)}”<cite>on ${esc(c.latest.f.title)}</cite></blockquote>` : ""}
+      </article>`;
+  }).join("");
+}
+
+/* ---------- party mode ---------- */
+// Party images are private to the club, so each file is shown through a signed link (good for a week).
+const partyUrls = new Map(); // path -> signed URL
+async function signPartyUrls() {
+  const need = stickers.map(s => s.path).filter(p => !partyUrls.has(p));
+  if (!need.length) return;
+  const { data } = await sb.storage.from("party").createSignedUrls(need, 7 * 24 * 3600);
+  (data || []).forEach(d => { if (d.signedUrl) partyUrls.set(d.path, d.signedUrl); });
+}
+const partyUrl = path => partyUrls.get(path) || "";
+function renderParty() {
+  const layer = $("party-layer");
+  if (!layer) return;
+  const on = canParty && party;
+  const sw = $("party-switch");
+  sw.hidden = !canParty;
+  $("party-add").hidden = !(on && me);
+  sw.setAttribute("aria-checked", on ? "true" : "false");
+  document.body.classList.toggle("party-on", on);
+  layer.hidden = !on;
+  layer.classList.toggle("party-edit", on && !!me);
+  if (!on || partyDrag) return; // don't redraw under someone's finger
+  // Positions are saved relative to the page column. On a narrower screen, nudge an image back
+  // inside the window rather than let it hang off the edge (the saved position doesn't change).
+  const box = layer.getBoundingClientRect(), W = box.width || 1;
+  const vw = document.documentElement.clientWidth, pad = 6;
+  const place = st => {
+    const w = Math.min(st.w * W, vw - pad * 2);
+    const left = Math.min(Math.max(st.x * W, pad - box.left), vw - pad - box.left - w);
+    return `left:${left}px; top:${st.y}px; width:${w}px`;
+  };
+  layer.innerHTML = stickers.filter(st => st.tab === tab && partyUrl(st.path)).map(st => `
+    <div class="sticker" data-id="${st.id}" style="${place(st)}; z-index:${st.z}">
+      <img src="${esc(partyUrl(st.path))}" alt="" loading="lazy" draggable="false">
+      ${me ? `<button class="st-del" type="button" data-del="${st.id}" aria-label="Remove image">×</button><span class="st-resize" aria-hidden="true"></span>` : ""}
+    </div>`).join("");
+}
+
+$("party-add").addEventListener("click", () => $("party-file").click());
+$("btn-settings").addEventListener("click", openSettings);
+$("party-switch").addEventListener("click", () => {
+  party = !party;
+  try { localStorage.setItem("mc-party", party ? "on" : "off"); } catch (e) {}
+  render();
+  if (party) {
+    confetti($("party-switch"));
+    if (me) toast("Party mode on. Add images with the button up top, paste them, or drop them on the page.");
+  }
+});
+let partyResize;
+addEventListener("resize", () => { clearTimeout(partyResize); partyResize = setTimeout(renderParty, 150); });
+
+// A short confetti pop from an element. Skipped for people who turn off motion.
+function confetti(from) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c = document.createElement("canvas");
+  c.className = "confetti";
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+  document.body.append(c);
+  const ctx = c.getContext("2d"); ctx.scale(dpr, dpr);
+  const b = from.getBoundingClientRect(), ox = b.left + b.width / 2, oy = b.top + b.height / 2;
+  const colors = ["#f2b544", "#e74c3c", "#f39c12", "#f4d03f", "#6dd674", "#289e47", "#8cc8ff", "#ffffff"];
+  const bits = Array.from({ length: 140 }, () => {
+    const a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 9;
+    return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 5, w: 5 + Math.random() * 6, h: 3 + Math.random() * 5,
+      r: Math.random() * Math.PI, vr: (Math.random() - .5) * .4, color: colors[Math.floor(Math.random() * colors.length)] };
+  });
+  const start = performance.now(), life = 1700;
+  (function frame(now) {
+    const t = now - start;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - life * .6) / (life * .4));
+    for (const p of bits) {
+      p.vy += .32; p.vx *= .985; p.vy *= .985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+    }
+    if (t < life) requestAnimationFrame(frame); else c.remove();
+  })(start);
+}
+
+// Move and resize with pointer events (mouse, touch, pen). Saved once when you let go.
+$("party-layer").addEventListener("pointerdown", e => {
+  if (!me || e.button > 0) return;
+  const el = e.target.closest(".sticker"); if (!el || e.target.closest(".st-del")) return;
+  e.preventDefault();
+  const layer = $("party-layer").getBoundingClientRect(), box = el.getBoundingClientRect();
+  partyDrag = {
+    el, id: el.dataset.id, resize: !!e.target.closest(".st-resize"),
+    startX: e.clientX, startY: e.clientY, left: box.left - layer.left, top: box.top - layer.top, width: box.width, layerW: layer.width
+  };
+  const topZ = Math.max(0, ...stickers.map(s => s.z)) + 1;
+  el.style.zIndex = topZ; partyDrag.z = topZ;
+  document.querySelectorAll(".sticker.active").forEach(x => x.classList.remove("active"));
+  el.classList.add("active", "dragging");
+  try { el.setPointerCapture(e.pointerId); } catch (err) {}
+});
+$("party-layer").addEventListener("pointermove", e => {
+  const d = partyDrag; if (!d) return;
+  const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+  if (d.resize) {
+    d.newW = Math.max(40, Math.min(d.layerW, d.width + dx));
+    d.el.style.width = `${(d.newW / d.layerW) * 100}%`;
+  } else {
+    d.el.style.left = `${((d.left + dx) / d.layerW) * 100}%`;
+    d.el.style.top = `${Math.max(0, d.top + dy)}px`;
+  }
+});
+async function endPartyDrag(e) {
+  const d = partyDrag; if (!d) return;
+  partyDrag = null;
+  d.el.classList.remove("dragging");
+  const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+  if (Math.abs(dx) < 2 && Math.abs(dy) < 2 && !d.resize) return; // a tap, not a drag
+  const patch = d.resize
+    ? { w: (d.newW ?? d.width) / d.layerW, z: d.z }
+    : { x: (d.left + dx) / d.layerW, y: Math.max(0, d.top + dy), z: d.z };
+  const st = stickers.find(s => s.id === d.id); if (st) Object.assign(st, patch);
+  const { error } = await sb.from("stickers").update(patch).eq("club_id", club.id).eq("id", d.id);
+  if (error) { toast("Couldn't save where that image went. Try again."); scheduleReload(); }
+}
+$("party-layer").addEventListener("pointerup", endPartyDrag);
+$("party-layer").addEventListener("pointercancel", endPartyDrag);
+// Tap elsewhere to deselect.
+document.addEventListener("pointerdown", e => { if (!e.target.closest(".sticker")) document.querySelectorAll(".sticker.active").forEach(x => x.classList.remove("active")); });
+
+// Remove: tap × once to arm, again to delete.
+$("party-layer").addEventListener("click", async e => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  if (!b.classList.contains("confirm")) { b.classList.add("confirm"); b.textContent = "Delete?"; setTimeout(() => { b.classList.remove("confirm"); b.textContent = "×"; }, 3000); return; }
+  const st = stickers.find(s => s.id === b.dataset.del); if (!st) return;
+  stickers = stickers.filter(s => s !== st); renderParty();
+  const { error } = await sb.from("stickers").delete().eq("club_id", club.id).eq("id", st.id);
+  if (error) { toast("Couldn't remove that image."); scheduleReload(); return; }
+  sb.storage.from("party").remove([st.path]).catch(() => {});
+  toast("Image removed");
+});
+
+// Shrink big photos before upload; GIFs go up as they are so they keep animating.
+async function prepareImage(file) {
+  if (file.type === "image/gif") return { blob: file, ext: "gif", type: "image/gif" };
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  const toBlob = (type, q) => new Promise(r => c.toBlob(r, type, q));
+  let blob = await toBlob("image/webp", 0.85);
+  if (blob && blob.type === "image/webp") return { blob, ext: "webp", type: "image/webp" };
+  const png = file.type === "image/png";
+  blob = await toBlob(png ? "image/png" : "image/jpeg", 0.85);
+  return { blob, ext: png ? "png" : "jpg", type: png ? "image/png" : "image/jpeg" };
+}
+async function addPartyImages(files, at) {
+  if (!me) { signIn(); return; }
+  if (!canParty) return;
+  const imgs = [...files].filter(f => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+  if (!imgs.length) { toast("That isn't an image the page can use. Try a PNG, JPG, GIF or WebP."); return; }
+  if (!party) { party = true; try { localStorage.setItem("mc-party", "on"); } catch (e) {} }
+  const layer = $("party-layer").getBoundingClientRect();
+  let i = 0;
+  for (const f of imgs) {
+    if (f.size > 2 * 1024 * 1024 && f.type === "image/gif") { toast("That GIF is over 2 MB. Try a smaller one."); continue; }
+    toast("Adding image…");
+    let prepared;
+    try { prepared = await prepareImage(f); } catch (e) { toast("Couldn't read that image."); continue; }
+    const path = `${club.id}/${crypto.randomUUID()}.${prepared.ext}`;
+    const up = await sb.storage.from("party").upload(path, prepared.blob, { contentType: prepared.type, cacheControl: "31536000" });
+    if (up.error) { toast(/size|large/i.test(up.error.message) ? "That image is too big (2 MB max)." : "Couldn't upload that image. Try again."); continue; }
+    const cx = at ? at.x : innerWidth / 2, cy = at ? at.y : innerHeight / 3;
+    const w = Math.min(0.3, 260 / layer.width);
+    const row = {
+      club_id: club.id, path, tab, added_by: me, w,
+      x: Math.min(1 - w, Math.max(0, (cx - layer.left) / layer.width - w / 2)) + i * 0.02,
+      y: Math.max(0, cy - layer.top - 60 + i * 20),
+      z: Math.max(0, ...stickers.map(s => s.z)) + 1
+    };
+    const { error } = await sb.from("stickers").insert(row);
+    if (error) { sb.storage.from("party").remove([path]).catch(() => {}); toast(error.code === "P0001" ? error.message : "Couldn't place that image. Try again."); continue; }
+    i++;
+  }
+  if (i) { toast(i > 1 ? `Added ${i} images` : "Image added. Drag it around, or drag the corner to resize."); scheduleReload(); }
+}
+$("party-file").addEventListener("change", e => { addPartyImages(e.target.files); e.target.value = ""; });
+// Paste an image anywhere (not while typing in a box).
+document.addEventListener("paste", e => {
+  if (!canParty || !me || e.target.closest("input, textarea")) return;
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addPartyImages(files); }
+});
+// Drag files from your computer onto the page.
+let dropDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes("Files");
+document.addEventListener("dragenter", e => { if (canParty && me && hasFiles(e)) { dropDepth++; $("party-drop").hidden = false; } });
+document.addEventListener("dragleave", e => { if (hasFiles(e) && --dropDepth <= 0) { dropDepth = 0; $("party-drop").hidden = true; } });
+document.addEventListener("dragover", e => { if (canParty && me && hasFiles(e)) e.preventDefault(); });
+document.addEventListener("drop", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dropDepth = 0; $("party-drop").hidden = true;
+  if (canParty && me) addPartyImages(e.dataTransfer.files, { x: e.clientX, y: e.clientY });
+});
+
+/* ---------- settings: personal palette ---------- */
+// [id, name, note, swatch colours: background, surface, accent, display]
+const PALETTES = [
+  ["charcoal", "Charcoal", "Default", "#1c1d20", "#26282c", "#f2b544", "#f2b544"],
+  ["velvet", "Velvet", "The original burgundy", "#170c0e", "#22131a", "#f2b544", "#f2b544"],
+  ["midnight", "Midnight", "Navy and gold", "#0f1626", "#18213a", "#ffc94d", "#8cc8ff"],
+  ["noir", "Noir", "Black and white", "#0b0b0b", "#161616", "#e6e6e6", "#ffffff"],
+  ["drive-in", "Drive-in", "Teal and neon orange", "#0e1f1f", "#152b2b", "#ff7a59", "#ff7a59"],
+  ["popcorn", "Popcorn", "Light: butter and red", "#fbf6e9", "#fffdf6", "#9c6200", "#c8361d"],
+  ["arthouse", "Arthouse", "Light: sage and green", "#eef0ec", "#fafbf8", "#9a6418", "#2f6b4f"]
+];
+// Custom palette: five picked colors; the rest are worked out from them.
+const CUSTOM_KEYS = ["bg", "surface", "fg", "accent", "display"];
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgbHex = c => "#" + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+const mixHex = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
+const lum = h => { const c = hexRgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+function customVars(c) {
+  const dark = lum(c.bg) < 0.2;
+  return {
+    bg: c.bg, surface: c.surface, fg: c.fg, accent: c.accent, display: c.display,
+    sunk: mixHex(c.bg, c.surface, 0.45),
+    line: mixHex(c.surface, c.fg, 0.16),
+    muted: mixHex(c.fg, c.bg, 0.38),
+    "on-accent": contrast(c.accent, "#000000") >= contrast(c.accent, "#ffffff") ? "#111111" : "#ffffff",
+    bulb: c.accent,
+    danger: dark ? "#ff8a7a" : "#b3261e",
+    good: dark ? "#6fcf7f" : "#23863a",
+    "color-scheme": dark ? "dark" : "light"
+  };
+}
+// Saved custom palettes: [{id, name, base: {five colors}, vars: {all tokens}}], kept per browser.
+// The active palette is "charcoal", a built-in id, or "custom:<id>".
+function loadPalettes() {
+  let list = null;
+  try { list = JSON.parse(localStorage.getItem("mc-custom-palettes") || "null"); } catch (e) {}
+  if (!Array.isArray(list)) {
+    // Carry over the single Custom palette from before palettes had names.
+    list = [];
+    try {
+      const old = JSON.parse(localStorage.getItem("mc-custom-palette") || "null");
+      if (old && old.base) {
+        list.push({ id: "mine", name: "My palette", base: old.base, vars: customVars(old.base) });
+        if (localStorage.getItem("mc-palette") === "custom") localStorage.setItem("mc-palette", "custom:mine");
+      }
+      localStorage.setItem("mc-custom-palettes", JSON.stringify(list));
+    } catch (e) {}
+  }
+  return list;
+}
+function savePalettes(list) { try { localStorage.setItem("mc-custom-palettes", JSON.stringify(list)); } catch (e) {} }
+function uniqueName(name, list, exceptId) {
+  const taken = new Set(list.filter(x => x.id !== exceptId).map(x => x.name.toLowerCase()));
+  let n = name.trim() || "My palette", i = 2, out = n;
+  while (taken.has(out.toLowerCase())) out = `${n} (${i++})`;
+  return out;
+}
+function addPalette(name, base) {
+  const list = loadPalettes();
+  const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: uniqueName(name, list), base, vars: customVars(base) };
+  list.push(entry); savePalettes(list);
+  return entry;
+}
+function activeCustom() {
+  const cur = currentPalette();
+  return cur.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === cur) || null : null;
+}
+function updateActive(patch) {
+  const list = loadPalettes(), cur = activeCustom(); if (!cur) return null;
+  const e = list.find(x => x.id === cur.id);
+  Object.assign(e, patch);
+  if (patch.base) e.vars = customVars(e.base);
+  savePalettes(list);
+  return e;
+}
+function setCustomVars(base) {
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(customVars(base))) root.setProperty("--" + k, v);
+  root.colorScheme = customVars(base)["color-scheme"];
+}
+function clearCustomVars() {
+  const root = document.documentElement.style;
+  for (const k of Object.keys(customVars(CHARCOAL))) root.removeProperty("--" + k);
+  root.colorScheme = "";
+}
+// Read the colors currently on screen, so a new palette starts from whatever you had.
+function currentColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const toHex = v => { v = v.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase(); if (/^#[0-9a-f]{3}$/i.test(v)) return "#" + [...v.slice(1)].map(x => x + x).join(""); return "#808080"; };
+  return Object.fromEntries(CUSTOM_KEYS.map(k => [k, toHex(cs.getPropertyValue("--" + k))]));
+}
+const CHARCOAL = { bg: "#1c1d20", surface: "#26282c", fg: "#ecebe8", accent: "#f2b544", display: "#f2b544" };
+
+function currentPalette() {
+  let p = "charcoal";
+  try { p = localStorage.getItem("mc-palette") || "charcoal"; } catch (e) {}
+  if (p === "custom") { loadPalettes(); try { p = localStorage.getItem("mc-palette") || "charcoal"; } catch (e) {} }
+  return p;
+}
+function applyPalette(id) {
+  const entry = id.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === id) : null;
+  if (id.startsWith("custom:") && !entry) id = "charcoal";
+  if (entry) {
+    document.documentElement.dataset.palette = "custom";
+    setCustomVars(entry.base);
+  } else {
+    clearCustomVars();
+    if (id === "charcoal") delete document.documentElement.dataset.palette;
+    else document.documentElement.dataset.palette = id;
+  }
+  try { localStorage.setItem("mc-palette", id); } catch (e) {}
+  syncCustomEditor();
+  updateFavicon();
+}
+
+// The tab icon follows your palette: [tile, border and letter].
+const FAVICONS = {
+  charcoal: ["#2b2d31", "#f2b544"],
+  velvet: ["#4a1424", "#f2b544"],
+  midnight: ["#18213a", "#8cc8ff"],
+  noir: ["#111111", "#ffffff"],
+  "drive-in": ["#152b2b", "#ff7a59"],
+  popcorn: ["#fbf6e9", "#c8361d"],
+  arthouse: ["#eef0ec", "#2f6b4f"]
+};
+function updateFavicon() {
+  const cur = currentPalette(), custom = activeCustom();
+  const [tile, ink] = custom ? [custom.base.surface, custom.base.display] : FAVICONS[cur] || FAVICONS.charcoal;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='30' height='30' rx='6' fill='${tile}' stroke='${ink}' stroke-width='2'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='${ink}' font-family='Arial Black,sans-serif'>J</text></svg>`;
+  $("favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+}
+updateFavicon();
+function syncCustomEditor() {
+  const entry = activeCustom();
+  $("custom-editor").hidden = !entry;
+  if (!entry) return;
+  const base = entry.base;
+  if (document.activeElement !== $("c-name")) $("c-name").value = entry.name;
+  CUSTOM_KEYS.forEach(k => { $("c-" + k).value = base[k]; });
+  const warn = [];
+  if (contrast(base.fg, base.bg) < 4.5) warn.push("text on the background");
+  if (contrast(base.fg, base.surface) < 4.5) warn.push("text on cards");
+  if (contrast(base.display, base.bg) < 3) warn.push("headings on the background");
+  $("custom-warn").hidden = !warn.length;
+  $("custom-warn").textContent = warn.length ? `Hard to read: ${warn.join(", ")}. Try a lighter or darker color.` : "";
+  // Keep this palette's tile in step.
+  const tile = $("palettes").querySelector(`input[value="custom:${entry.id}"]`)?.closest(".palette");
+  if (tile) {
+    tile.querySelector(".sw").innerHTML = swatchInner(base.bg, base.surface, base.accent, base.display);
+    tile.querySelector(".name").textContent = entry.name;
+  }
+}
+const swatchInner = (bg, surface, accent, display) => `<span style="background:${bg}"></span><span style="background:${surface}"></span><span style="background:linear-gradient(${display} 50%, ${accent} 50%)"></span>`;
+function syncSettingsExtras() {
+  $("settings-account").hidden = !me;
+  $("btn-club-admin").hidden = !isAdmin();
+  $("settings-email").textContent = session?.user?.email ? `Signed in as ${session.user.email}` : "";
+  $("runtime-format").querySelectorAll("[data-format]").forEach(b => b.setAttribute("aria-pressed", b.dataset.format === runtimeFormat ? "true" : "false"));
+}
+$("runtime-format").addEventListener("click", e => {
+  const b = e.target.closest("[data-format]"); if (!b) return;
+  runtimeFormat = b.dataset.format;
+  try { localStorage.setItem("mc-runtime", runtimeFormat); } catch (e) {}
+  syncSettingsExtras();
+  render();
+});
+function openSettings() {
+  syncSettingsExtras();
+  const cur = currentPalette();
+  const mine = loadPalettes().map(x => [`custom:${x.id}`, x.name, x.imported ? "Imported" : "Yours", x.base.bg, x.base.surface, x.base.accent, x.base.display]);
+  const tile = ([id, name, note, bg, surface, accent, display]) => `
+    <label class="palette">
+      <input type="radio" name="palette" value="${esc(id)}"${id === cur ? " checked" : ""}>
+      <span class="sw" aria-hidden="true">${swatchInner(bg, surface, accent, display)}</span>
+      <span class="name">${esc(name)}</span>
+      <span class="note">${esc(note)}</span>
+    </label>`;
+  $("palettes").innerHTML = `<legend class="label">Color palette</legend>` + [...PALETTES, ...mine].map(tile).join("") + `
+    <label class="palette">
+      <input type="radio" name="palette" value="new">
+      <span class="sw" aria-hidden="true" style="display:grid;place-items:center;font-size:22px;color:var(--muted);border-style:dashed">+</span>
+      <span class="name">New palette</span>
+      <span class="note">Pick your own colors</span>
+    </label>`;
+  $("custom-share-note").textContent = ""; $("custom-link").hidden = true;
+  $("custom-delete").textContent = "Delete palette"; $("custom-delete").classList.remove("confirm");
+  syncCustomEditor();
+  if (!$("settings").open) openDialog($("settings"));
+  $("palettes").querySelector("input:checked")?.focus();
+}
+$("palettes").addEventListener("change", e => {
+  if (e.target.name !== "palette") return;
+  if (e.target.value === "new") {
+    const entry = addPalette(`My palette ${loadPalettes().length + 1}`, currentColors());
+    applyPalette(`custom:${entry.id}`);
+    openSettings();
+    $("c-name").focus(); $("c-name").select();
+    return;
+  }
+  applyPalette(e.target.value);
+});
+$("c-name").addEventListener("input", () => {
+  const cur = activeCustom(); if (!cur) return;
+  updateActive({ name: $("c-name").value.trim() || cur.name });
+  syncCustomEditor();
+});
+$("c-name").addEventListener("change", () => {
+  // On leaving the box, make sure the name is filled in and not a copy of another palette's.
+  const cur = activeCustom(); if (!cur) return;
+  updateActive({ name: uniqueName($("c-name").value, loadPalettes(), cur.id) });
+  $("c-name").value = activeCustom().name;
+  syncCustomEditor();
+});
+$("custom-editor").addEventListener("input", e => {
+  const key = e.target.dataset && e.target.dataset.key; if (!key) return;
+  const cur = activeCustom(); if (!cur) return;
+  const entry = updateActive({ base: { ...cur.base, [key]: e.target.value } });
+  setCustomVars(entry.base);
+  syncCustomEditor();
+  updateFavicon();
+});
+$("custom-reset").addEventListener("click", () => { const e = updateActive({ base: { ...CHARCOAL } }); if (e) { setCustomVars(e.base); syncCustomEditor(); } });
+$("custom-delete").addEventListener("click", () => {
+  const b = $("custom-delete"), cur = activeCustom(); if (!cur) return;
+  if (!b.classList.contains("confirm")) { b.classList.add("confirm"); b.textContent = `Delete "${cur.name}"?`; return; }
+  savePalettes(loadPalettes().filter(x => x.id !== cur.id));
+  applyPalette("charcoal");
+  openSettings();
+  toast(`Deleted ${cur.name}`);
+});
+
+// Sharing: the five colors as a short code (bg-cards-text-accent-headings) plus the name, carried in a link.
+const paletteCode = base => CUSTOM_KEYS.map(k => base[k].replace("#", "").toLowerCase()).join("-");
+function parsePalette(text) {
+  const hex = String(text || "").match(/[0-9a-f]{6}(?![0-9a-f])/gi);
+  if (!hex || hex.length < 5) return null;
+  const five = hex.slice(0, 5).map(h => "#" + h.toLowerCase());
+  return Object.fromEntries(CUSTOM_KEYS.map((k, i) => [k, five[i]]));
+}
+// Pull the palette (and its name, if any) out of a pasted link or a bare code.
+function parseShared(text) {
+  text = String(text || "").trim();
+  let code = text, name = "";
+  const q = text.indexOf("?");
+  if (q >= 0) {
+    const params = new URLSearchParams(text.slice(q + 1).split("#")[0]);
+    code = params.get("palette") || "";
+    name = params.get("name") || "";
+  }
+  const base = parsePalette(code);
+  return base ? { base, name: name.slice(0, 40) } : null;
+}
+// Add a shared palette as a new one (never replacing yours) and switch to it.
+function importShared({ base, name }) {
+  const entry = addPalette(name || "Shared palette", base);
+  updateEntry(entry.id, { imported: true });
+  applyPalette(`custom:${entry.id}`);
+  if ($("settings").open) openSettings();
+  return entry;
+}
+function updateEntry(id, patch) { const list = loadPalettes(); const e = list.find(x => x.id === id); if (e) { Object.assign(e, patch); savePalettes(list); } }
+function shareNote(msg, err) { const n = $("custom-share-note"); n.textContent = msg; n.classList.toggle("err", !!err); }
+function importNote(msg, err) { const n = $("custom-import-note"); n.textContent = msg; n.classList.toggle("err", !!err); }
+$("custom-copy").addEventListener("click", async () => {
+  const cur = activeCustom(); if (!cur) return;
+  const link = `${location.origin}${location.pathname}?palette=${paletteCode(cur.base)}&name=${encodeURIComponent(cur.name)}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    $("custom-link").hidden = true;
+    shareNote(`Link to "${cur.name}" copied. Opening it adds the palette for whoever opens it.`);
+  } catch (e) {
+    // Clipboard blocked: show the link so it can be copied by hand.
+    $("custom-link").hidden = false;
+    $("custom-link-text").value = link;
+    $("custom-link-text").select();
+    shareNote("Copy the link above to share this palette.");
+  }
+});
+$("custom-import-open").addEventListener("click", () => {
+  $("custom-import").hidden = false;
+  $("custom-import-text").value = "";
+  importNote("");
+  $("custom-import-text").focus();
+});
+function importPalette() {
+  const shared = parseShared($("custom-import-text").value);
+  if (!shared) return importNote("That doesn't look like a palette link or code. It should contain five colors like 1c1d20-26282c-ecebe8-f2b544-f2b544.", true);
+  const entry = importShared(shared);
+  $("custom-import").hidden = true;
+  importNote(`Added "${entry.name}". Your other palettes are unchanged.`);
+}
+$("custom-import-go").addEventListener("click", importPalette);
+$("custom-import-text").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); importPalette(); } });
+
+// Opening a shared link: offer the palette, then tidy the address.
+(() => {
+  if (!SHARED_PALETTE) return;
+  try { const q = new URLSearchParams(location.search); q.delete("palette"); q.delete("name"); history.replaceState(null, "", location.pathname + (q.size ? "?" + q : "") + location.hash); } catch (e) {}
+  const base = parsePalette(SHARED_PALETTE);
+  if (!base) return;
+  const name = (SHARED_PALETTE_NAME || "").slice(0, 40);
+  setTimeout(() => toast(name ? `Someone shared the palette "${name}" with you.` : "Someone shared a color palette with you.", {
+    label: "Add it",
+    run: () => { const e = importShared({ base, name }); toast(`Added "${e.name}". Switch palettes any time in Settings.`); }
+  }), 600);
+})();
+$("settings-form").addEventListener("submit", e => { e.preventDefault(); closeDialog($("settings")); });
+
+/* ---------- poster preview on hover ---------- */
+const pop = document.createElement("img");
+pop.className = "poster-pop"; pop.alt = ""; pop.referrerPolicy = "no-referrer"; pop.setAttribute("aria-hidden", "true");
+document.body.append(pop);
+const canHover = matchMedia("(hover: hover) and (pointer: fine)");
+let popFor = null;
+// OMDb poster links end in _SX300.jpg; ask for a sharper copy, falling back to the original.
+const bigPoster = url => url.replace(/_SX\d+(?=\.\w+$)/, "_SX900").replace(/(image\.tmdb\.org\/t\/p\/)w\d+\//, "$1w780/");
+pop.addEventListener("error", () => { if (popFor && pop.src !== popFor.src) pop.src = popFor.src; });
+function placePop(x, y) {
+  // As big as 420 × 630, shrunk to fit short windows and to leave room beside the cursor.
+  const h = Math.min(630, innerHeight - 16, (innerWidth * 0.5) * 3 / 2), w = h * 2 / 3, gap = 18;
+  pop.style.width = w + "px";
+  const left = x + gap + w <= innerWidth - 8 ? x + gap : Math.max(8, x - gap - w);
+  const top = Math.min(Math.max(8, y - h / 2), innerHeight - h - 8);
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+}
+function hidePop() { popFor = null; pop.classList.remove("show"); }
+document.addEventListener("mouseover", e => {
+  if (!canHover.matches) return;
+  const img = e.target.closest && e.target.closest("img.poster");
+  if (!img || img === popFor) return;
+  popFor = img;
+  pop.src = bigPoster(img.src);
+  placePop(e.clientX, e.clientY);
+  pop.classList.add("show");
+});
+document.addEventListener("mousemove", e => { if (popFor) placePop(e.clientX, e.clientY); });
+document.addEventListener("mouseout", e => { if (popFor && e.target === popFor && e.relatedTarget !== popFor) hidePop(); });
+addEventListener("scroll", hidePop, { passive: true });
+
+/* ---------- interactions ---------- */
+$("sched-toggle").addEventListener("click", () => { showAll = !showAll; render(); });
+$("sched-filter").addEventListener("click", e => {
+  const b = e.target.closest("[data-filter]"); if (!b) return;
+  schedFilter = b.dataset.filter;
+  render();
+});
+$("takes-sort").addEventListener("click", e => {
+  const b = e.target.closest("[data-sort]"); if (!b) return;
+  takesSort = b.dataset.sort; takesShown = TAKES_STEP;
+  render();
+});
+// Vote: tap an arrow to vote, tap it again to take the vote back.
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-vote]"); if (!b || b.disabled) return;
+  if (!me) return signIn();
+  const slot = b.dataset.slot, author = b.dataset.author, value = +b.dataset.vote;
+  const k = `${slot}|${author}`, e0 = votes.get(k) || { up: 0, down: 0, by: {} };
+  const prev = e0.by[me] || 0, next = prev === value ? 0 : value;
+  // Show it straight away; the live refresh confirms it.
+  const e1 = { up: e0.up - (prev > 0) + (next > 0), down: e0.down - (prev < 0) + (next < 0), by: { ...e0.by, [me]: next || undefined } };
+  if (!next) delete e1.by[me];
+  votes.set(k, e1); render();
+  write(() => next
+    ? sb.from("review_votes").upsert({ club_id: club.id, slot, author, voter: me, value: next })
+    : sb.from("review_votes").delete().eq("club_id", club.id).eq("slot", slot).eq("author", author).eq("voter", me));
+});
+$("takes-more").addEventListener("click", () => { takesShown += TAKES_STEP; render(); });
+$("takes-less").addEventListener("click", () => {
+  takesShown = TAKES_STEP;
+  render();
+  $("takes-section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+$("watch-sort").addEventListener("click", e => {
+  const b = e.target.closest("[data-sort]"); if (!b) return;
+  sortMode = b.dataset.sort;
+  render();
+});
+$("only-unrated").addEventListener("change", e => { onlyUnrated = e.target.checked; render(); });
+$("critics-sort").addEventListener("click", e => {
+  const b = e.target.closest("[data-sort]"); if (!b) return;
+  criticsSort = b.dataset.sort;
+  render();
+});
+document.addEventListener("input", e => { const d = e.target.dataset && e.target.dataset.review; if (d) drafts[d] = e.target.value; });
+document.addEventListener("keydown", e => {
+  const d = e.target.dataset && e.target.dataset.review;
+  if (d && e.key === "Enter") { e.preventDefault(); saveReview(d); }
+});
+
+function gotoFilm(date) {
+  openFilms.add(date);
+  setTab("ratings");
+  render();
+  const row = $("film-" + date);
+  if (row) {
+    row.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash");
+  }
+}
+
+function saveReview(date) {
+  const slot = slots.find(s => s.date === date); if (!slot) return;
+  const input = $("review-" + date);
+  const text = (input ? input.value : drafts[date] || "").trim();
+  if (!slot.ratings[me]) { toast("Give it stars first."); return; }
+  write(() => sb.from("ratings").update({ review: text || null, updated_at: new Date().toISOString() }).eq("club_id", club.id).eq("slot", date).eq("member", me),
+    text ? "Review saved" : "Review removed").then(ok => { if (ok) delete drafts[date]; });
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]");
+  if (!b || !slots) return;
+  const act = b.dataset.act;
+  if (act === "goto-tab") return setTab(b.dataset.id);
+  const slot = slots.find(s => s.date === b.dataset.id);
+  if (!slot) return;
+  if (act === "goto") return gotoFilm(slot.date);
+  if (act === "expand") {
+    openFilms.has(slot.date) ? openFilms.delete(slot.date) : openFilms.add(slot.date);
+    return render();
+  }
+  if (act === "edit") return me ? openEditor(slot) : signIn();
+  if (act === "review") return saveReview(slot.date);
+  if (act === "missed") {
+    const was = slot.missed.has(me);
+    write(() => was
+      ? sb.from("absences").delete().eq("club_id", club.id).eq("slot", slot.date).eq("member", me)
+      : sb.from("absences").insert({ club_id: club.id, slot: slot.date, member: me }),
+      was ? `Marked you as at ${slot.title}` : `Recorded that you missed ${slot.title}`);
+    return;
+  }
+  if (act === "rate") {
+    const v = +b.dataset.v;
+    const nv = slot.ratings[me] === v ? 0 : v; // tap your current rating again to clear it
+    write(() => nv
+      ? sb.from("ratings").upsert({ club_id: club.id, slot: slot.date, member: me, score: nv, updated_at: new Date().toISOString() })
+      : sb.from("ratings").delete().eq("club_id", club.id).eq("slot", slot.date).eq("member", me),
+      nv ? `Rated ${slot.title} ${nv}★` : `Cleared your ${slot.reviews[me] ? "rating and review" : "rating"} for ${slot.title}`);
+    return;
+  }
+  if (act === "watched") {
+    write(() => sb.from("slots").update({ watched: true }).eq("club_id", club.id).eq("date", slot.date))
+      .then(ok => { if (ok) toast(`${slot.title} moved to the Ratings tab.`, { label: "Undo", run: () => unwatch(slot) }); });
+    return;
+  }
+  if (act === "unwatch") return unwatch(slot);
+});
+
+// Put a film marked watched by mistake back in the Next up spot. Its ratings are kept.
+function unwatch(slot) {
+  write(() => sb.from("slots").update({ watched: false }).eq("club_id", club.id).eq("date", slot.date), `${slot.title} is back in Next up`);
+}
+
+/* ---------- sign in ---------- */
+// Google sign-in. Comes back to this same address (club, invite or home).
+async function signIn() {
+  const back = location.origin + location.pathname + location.search;
+  const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: back } });
+  if (error) toast("Couldn't start Google sign-in. Try again in a moment.");
+}
+
+/* ---------- posters and film details (OMDb) ---------- */
+const omdbCache = new Map();
+// OMDb answers on two addresses and one is sometimes down; try each, giving up on one after 8 seconds.
+const OMDB_HOSTS = ["https://omdbapi.com/", "https://www.omdbapi.com/"];
+async function omdbFetch(query) {
+  let lastErr;
+  for (const host of OMDB_HOSTS) {
+    try {
+      const r = await fetch(`${host}?${query}&apikey=${encodeURIComponent(OMDB_KEY)}`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+      if (!r.ok) throw new Error(r.status);
+      return await r.json();
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+async function omdb(id) {
+  if (!OMDB_KEY) return null;
+  if (omdbCache.has(id)) return omdbCache.get(id);
+  try {
+    const j = await omdbFetch(`i=${encodeURIComponent(id)}`);
+    const out = j.Response === "True" ? j : null;
+    omdbCache.set(id, out);
+    return out;
+  } catch (e) { return null; }
+}
+const omdbPoster = j => j && j.Poster && j.Poster.startsWith("https://") ? j.Poster : "none";
+
+// Fill in posters the database doesn't have yet. Runs once per page load for a logged-in member.
+let backfilled = false;
+async function backfillPosters() {
+  if (backfilled || !(TMDB_KEY || OMDB_KEY) || !canPoster || !slots) return;
+  backfilled = true;
+  const todo = slots.filter(s => s.imdb && !s.poster);
+  let changed = 0;
+  for (const s of todo) {
+    const f = await filmByImdb(s.imdb);
+    if (!f) continue;
+    const { error } = await sb.from("slots").update({ poster: f.poster }).eq("club_id", club.id).eq("date", s.date).is("poster", null);
+    if (!error) changed++;
+  }
+  if (changed) scheduleReload();
+}
+
+/* ---------- my watchlist ---------- */
+const wlThumb = src => src ? `<img class="thumb" src="${esc(src)}" alt="" loading="lazy">` : `<span class="thumb"></span>`;
+function renderWatchlist() {
+  const box = $("watchlist-box");
+  box.hidden = !me || !canWatchlist;
+  if (box.hidden) return;
+  $("wl-add").hidden = !TMDB_KEY;
+  $("wl-empty").hidden = watchlist.length > 0;
+  $("wl-list").innerHTML = watchlist.map(w => `
+    <li class="wl-item">${wlThumb(w.poster)}
+      <span><b>${esc(w.title)}</b>${w.year ? `<small>${esc(w.year)}</small>` : ""}</span>
+      <button class="wl-remove" type="button" data-wl-remove="${w.id}" aria-label="Remove ${esc(w.title)} from your watchlist" title="Remove">×</button>
+    </li>`).join("");
+}
+// Title search for adding, debounced; the newest search wins.
+let wlTimer, wlSeq = 0;
+function wlHelp(msg) { $("wl-help").textContent = msg; $("wl-help").hidden = !msg; }
+$("wl-search").addEventListener("input", () => {
+  clearTimeout(wlTimer);
+  const q = $("wl-search").value.trim();
+  if (q.length < 2) { $("wl-results").innerHTML = ""; wlHelp(""); return; }
+  wlTimer = setTimeout(async () => {
+    const seq = ++wlSeq;
+    wlHelp("Searching…");
+    let found;
+    try { found = (await tmdbSearch(q)).slice(0, 6); }
+    catch (e) { if (seq === wlSeq) wlHelp("Film search isn't responding right now. Try again in a moment."); return; }
+    if (seq !== wlSeq) return;
+    wlHelp(found.length ? "" : `No films found for "${q}". Try a shorter title.`);
+    $("wl-results").innerHTML = found.map(r => {
+      const on = watchlist.some(w => w.tmdb_id === r.tmdbId);
+      return `<li><button type="button" data-wl-add="${r.tmdbId}" data-title="${esc(r.title)}" data-year="${esc(r.year)}" data-thumb="${esc(r.thumb || "")}"${on ? " disabled" : ""}>
+        ${wlThumb(r.thumb)}
+        <span><b>${esc(r.title)}</b><small>${[r.year, on ? "Already on your list" : ""].filter(Boolean).map(esc).join(" · ")}</small></span>
+      </button></li>`;
+    }).join("");
+  }, 300);
+});
+$("wl-search").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $("wl-results").querySelector("button:not(:disabled)")?.click(); }
+});
+$("wl-results").addEventListener("click", async e => {
+  const b = e.target.closest("[data-wl-add]"); if (!b) return;
+  $("wl-results").innerHTML = ""; $("wl-search").value = ""; wlHelp("");
+  const row = { tmdb_id: +b.dataset.wlAdd, title: b.dataset.title, year: b.dataset.year || null, poster: b.dataset.thumb || null };
+  await write(() => sb.from("watchlist").insert(row), `Added ${row.title} to your watchlist`);
+  $("wl-search").focus();
+});
+$("wl-list").addEventListener("click", async e => {
+  const b = e.target.closest("[data-wl-remove]"); if (!b) return;
+  const w = watchlist.find(x => x.id === +b.dataset.wlRemove); if (!w) return;
+  const { tmdb_id, title, year, poster } = w;
+  if (await write(() => sb.from("watchlist").delete().eq("id", w.id)))
+    toast(`Removed ${title}`, { label: "Undo", run: () => write(() => sb.from("watchlist").insert({ tmdb_id, title, year, poster })) });
+});
+
+/* ---------- editor ---------- */
+let editing = null, editorPoster;
+let pickedWl = null; // watchlist entry chosen in the editor; it comes off the list on save
+const dlg = $("editor");
+function openEditor(slot) {
+  editing = slot;
+  editorPoster = undefined;
+  $("picker-list").innerHTML = pickOrder().map(p => `<option value="${esc(p)}">`).join("");
+  $("editor-h").textContent = slot.title ? "Edit screening" : "Add the film";
+  $("editor-when").textContent = `${fmt(slot.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · ${slot.picker}'s pick`;
+  $("f-title").value = slot.title || "";
+  $("f-director").value = slot.director || "";
+  $("f-genre").value = slot.genre || "";
+  $("f-mins").value = slot.mins || "";
+  $("f-picker").value = slot.picker || "";
+  $("f-imdb").value = slot.imdb ? imdbUrl(slot.imdb) : "";
+  $("f-watched").checked = !!slot.watched;
+  $("editor-clear").hidden = !slot.title;
+  $("editor-error").hidden = true;
+  $("poster-grid").hidden = true; $("poster-grid").innerHTML = ""; $("poster-help").textContent = "";
+  showEditorPoster();
+  $("imdb-help").textContent = "Paste the film's IMDb link and the details below fill in.";
+  $("f-search").value = "";
+  $("search-results").innerHTML = "";
+  $("search-help").textContent = "Pick a result and everything below fills in.";
+  pickedWl = null;
+  renderWlPick();
+  openDialog(dlg);
+  $("f-search").focus();
+}
+
+// Fill the form from IMDb. fresh = replace what's there (a different film); otherwise only fill blanks.
+// TMDB: search, details and posters.
+const TMDB = "https://api.themoviedb.org/3";
+const tmdbImg = (path, size = "w500") => path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
+async function tmdb(path, params = {}) {
+  const q = new URLSearchParams({ api_key: TMDB_KEY, ...params });
+  const r = await fetch(`${TMDB}${path}?${q}`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function tmdbSearch(query) {
+  const j = await tmdb("/search/movie", { query, include_adult: "false" });
+  return (j.results || []).map(m => ({ tmdbId: m.id, title: m.title, year: (m.release_date || "").slice(0, 4), thumb: tmdbImg(m.poster_path, "w92"), original: m.original_title !== m.title ? m.original_title : "" }));
+}
+// Full details for a TMDB movie id, in the shape the form uses.
+async function tmdbDetails(tmdbId) {
+  const d = await tmdb(`/movie/${tmdbId}`, { append_to_response: "credits" });
+  return {
+    title: d.title, year: (d.release_date || "").slice(0, 4), imdb: d.imdb_id || null,
+    director: (d.credits?.crew || []).filter(x => x.job === "Director").map(x => x.name).join(", "),
+    genre: (d.genres || []).map(g => g.name).join(", "),
+    mins: d.runtime || null,
+    poster: tmdbImg(d.poster_path) || "none"
+  };
+}
+async function tmdbByImdb(imdbId) {
+  const j = await tmdb(`/find/${imdbId}`, { external_source: "imdb_id" });
+  const m = (j.movie_results || [])[0];
+  return m ? tmdbDetails(m.id) : null;
+}
+// Details for an IMDb id: TMDB first, OMDb as a backup.
+async function filmByImdb(imdbId) {
+  if (TMDB_KEY) { try { const d = await tmdbByImdb(imdbId); if (d) return d; } catch (e) {} }
+  const j = await omdb(imdbId);
+  if (!j) return null;
+  return { title: j.Title, year: j.Year, imdb: imdbId, director: j.Director !== "N/A" ? j.Director : "", genre: j.Genre !== "N/A" ? j.Genre : "", mins: parseInt(j.Runtime, 10) || null, poster: omdbPoster(j) };
+}
+
+// Put a film's details into the form. fresh = replace what's there (a different film); otherwise only fill blanks.
+// Poster preview and picker in the edit form.
+function showEditorPoster() {
+  const url = editorPoster !== undefined ? editorPoster : editing?.poster;
+  const has = !!url && url !== "none";
+  $("poster-field").hidden = !(has || /tt\d{5,10}/.test($("f-imdb").value)) || !TMDB_KEY;
+  $("f-poster-img").src = has ? url : "";
+  $("f-poster-img").style.visibility = has ? "visible" : "hidden";
+}
+$("poster-more").addEventListener("click", async () => {
+  const m = $("f-imdb").value.match(/tt\d{5,10}/);
+  if (!m) { $("poster-help").textContent = "Pick the film first."; return; }
+  $("poster-help").textContent = "Loading posters…";
+  try {
+    const found = await tmdb(`/find/${m[0]}`, { external_source: "imdb_id" });
+    const movie = (found.movie_results || [])[0];
+    if (!movie) throw new Error("not found");
+    const imgs = await tmdb(`/movie/${movie.id}/images`);
+    // English and textless first, then the rest; best-voted first within each.
+    const rank = x => (x.iso_639_1 === "en" ? 0 : x.iso_639_1 == null ? 1 : 2);
+    const posters = (imgs.posters || []).sort((a, b) => rank(a) - rank(b) || b.vote_average - a.vote_average).slice(0, 30);
+    if (!posters.length) { $("poster-help").textContent = "No other posters for this film."; return; }
+    const current = $("f-poster-img").src;
+    $("poster-grid").innerHTML = posters.map(x => {
+      const big = tmdbImg(x.file_path, "w500");
+      return `<li><button type="button" data-poster="${esc(big)}" aria-label="Use this poster" aria-pressed="${current === big}"><img src="${esc(tmdbImg(x.file_path, "w185"))}" alt="" loading="lazy"></button></li>`;
+    }).join("");
+    $("poster-grid").hidden = false;
+    $("poster-help").textContent = `${posters.length} posters. Pick one, then save.`;
+  } catch (e) {
+    $("poster-help").textContent = "Couldn't load other posters right now. Try again in a moment.";
+  }
+});
+$("poster-grid").addEventListener("click", e => {
+  const b = e.target.closest("[data-poster]"); if (!b) return;
+  editorPoster = b.dataset.poster;
+  $("poster-grid").querySelectorAll("[aria-pressed]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  showEditorPoster();
+  $("poster-help").textContent = "Poster chosen. Save to keep it.";
+});
+
+// Your watchlist in the editor, for upcoming screenings.
+function renderWlPick() {
+  const show = !!(me && canWatchlist && watchlist.length && TMDB_KEY && editing && !editing.watched);
+  $("wl-field").hidden = !show;
+  $("wl-pick").innerHTML = show ? watchlist.map(w => `
+    <li><button type="button" data-wl-pick="${w.id}" aria-pressed="${pickedWl === w.id}">
+      ${wlThumb(w.poster)}
+      <span><b>${esc(w.title)}</b>${w.year ? `<small>${esc(w.year)}</small>` : ""}</span>
+    </button></li>`).join("") : "";
+}
+$("wl-pick").addEventListener("click", async e => {
+  const b = e.target.closest("[data-wl-pick]"); if (!b) return;
+  const w = watchlist.find(x => x.id === +b.dataset.wlPick); if (!w) return;
+  pickedWl = w.id;
+  renderWlPick();
+  $("imdb-help").textContent = "Looking up the film…";
+  try {
+    fillForm(await tmdbDetails(w.tmdb_id), true);
+    $("imdb-help").textContent += " It comes off your watchlist when you save.";
+  } catch (err) { $("imdb-help").textContent = "Couldn't load that film's details right now. Try again, or fill them in below."; }
+});
+
+function fillForm(f, fresh) {
+  const set = (el, v) => { if (v && (fresh || !$(el).value.trim())) $(el).value = v; };
+  set("f-title", f.title); set("f-director", f.director); set("f-genre", f.genre);
+  if (f.mins) set("f-mins", String(f.mins));
+  if (f.imdb) $("f-imdb").value = imdbUrl(f.imdb);
+  editorPoster = f.poster || "none";
+  showEditorPoster();
+  $("imdb-help").textContent = `Filled in: ${f.title}${f.year ? ` (${f.year})` : ""}.`;
+}
+async function fillFromImdb(id, fresh) {
+  $("imdb-help").textContent = "Looking up the film…";
+  const f = await filmByImdb(id);
+  if (f) fillForm(f, fresh);
+  else $("imdb-help").textContent = "Couldn't look that film up right now. Fill in the details below.";
+}
+
+// Title search, debounced; the newest search wins.
+let searchTimer, searchSeq = 0;
+$("f-search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = $("f-search").value.trim();
+  if (q.length < 2) { $("search-results").innerHTML = ""; $("search-help").textContent = "Pick a result and everything below fills in."; return; }
+  searchTimer = setTimeout(async () => {
+    const seq = ++searchSeq;
+    $("search-help").textContent = "Searching…";
+    let found = [];
+    try {
+      found = (await tmdbSearch(q)).slice(0, 8);
+    } catch (e) {
+      if (seq === searchSeq) $("search-help").textContent = "Film search isn't responding right now. Paste the IMDb link below, or type the details in.";
+      return;
+    }
+    if (seq !== searchSeq) return;
+    $("search-help").textContent = found.length ? "Pick a result and everything below fills in." : `No films found for "${q}". Try a shorter title.`;
+    $("search-results").innerHTML = found.map(r => `
+      <li><button type="button" data-pick="${r.tmdbId}">
+        ${r.thumb ? `<img class="thumb" src="${esc(r.thumb)}" alt="" loading="lazy">` : `<span class="thumb"></span>`}
+        <span><b>${esc(r.title)}</b><small>${[r.year, r.original].filter(Boolean).map(esc).join(" · ")}</small></span>
+      </button></li>`).join("");
+  }, 300);
+});
+$("search-results").addEventListener("click", async e => {
+  const b = e.target.closest("[data-pick]"); if (!b) return;
+  pickedWl = null; renderWlPick();
+  $("search-results").innerHTML = "";
+  $("f-search").value = "";
+  $("search-help").textContent = "Pick a result and everything below fills in.";
+  $("imdb-help").textContent = "Looking up the film…";
+  try { fillForm(await tmdbDetails(b.dataset.pick), true); }
+  catch (err) { $("imdb-help").textContent = "Couldn't load that film's details right now. Try again, or fill them in below."; }
+  $("f-title").focus();
+});
+let imdbTimer;
+$("f-imdb").addEventListener("input", () => {
+  clearTimeout(imdbTimer);
+  imdbTimer = setTimeout(async () => {
+    const m = $("f-imdb").value.match(/tt\d{5,10}/);
+    if (!m) return;
+    if (editing && m[0] !== editing.imdb) editorPoster = null;
+    await fillFromImdb(m[0], !editing || m[0] !== editing.imdb);
+  }, 400);
+});
+$("f-search").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $("search-results").querySelector("button")?.click(); }
+});
+function formError(msg) { const el = $("editor-error"); el.textContent = msg; el.hidden = false; }
+$("editor-form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (!editing) return;
+  const title = $("f-title").value.trim();
+  const imdbRaw = $("f-imdb").value.trim();
+  const m = imdbRaw.match(/tt\d{5,10}/);
+  if (imdbRaw && !m) return formError("That IMDb link doesn't look right. It should contain an id like tt0118694.");
+  const minsRaw = $("f-mins").value.trim();
+  const mins = minsRaw ? Math.round(+minsRaw) : null;
+  if (minsRaw && !(mins > 0)) return formError("Runtime should be a number of minutes, like 112.");
+  const picker = $("f-picker").value.trim();
+  if (!picker) return formError("Add who picked this one.");
+  const watched = $("f-watched").checked;
+  if (watched && !title) return formError("Add the film's title before marking it watched.");
+  const date = editing.date;
+  const imdb = m ? m[0] : null;
+  const data = {
+    title: title || null,
+    director: $("f-director").value.trim() || null,
+    genre: $("f-genre").value.trim() || null,
+    mins, imdb, picker, watched
+  };
+  if (canPoster) {
+    if (!imdb) data.poster = null;
+    else if (editorPoster !== undefined) data.poster = editorPoster;
+    else if (imdb !== editing.imdb) data.poster = null; // backfill picks it up later
+  }
+  // Saving a film chosen from your watchlist takes it off the list.
+  const wl = watchlist.find(w => w.id === pickedWl && title && w.title.toLowerCase() === title.toLowerCase());
+  closeDialog(dlg);
+  write(() => sb.from("slots").update(data).eq("club_id", club.id).eq("date", date), wl ? `Saved. ${wl.title} came off your watchlist.` : "Saved")
+    .then(ok => { if (ok && wl) sb.from("watchlist").delete().eq("id", wl.id).then(scheduleReload); });
+});
+$("editor-clear").addEventListener("click", () => {
+  if (!editing) return;
+  const date = editing.date;
+  closeDialog(dlg);
+  const data = { title: null, director: null, genre: null, mins: null, imdb: null, watched: false };
+  if (canPoster) data.poster = null;
+  write(() => sb.from("slots").update(data).eq("club_id", club.id).eq("date", date), "Film cleared from that date");
+});
+
+/* ---------- account ---------- */
+async function signOut() {
+  await sb.auth.signOut().catch(() => {});
+  location.href = location.pathname;
+}
+// A club's party images, removed before the club itself goes.
+async function removeClubFiles(clubId) {
+  const { data } = await sb.storage.from("party").list(clubId, { limit: 1000 });
+  const paths = (data || []).map(f => `${clubId}/${f.name}`);
+  if (paths.length) await sb.storage.from("party").remove(paths);
+}
+async function leaveClub() {
+  const alone = members.filter(m => m.user_id).length === 1;
+  const msg = alone
+    ? `You're the only one who has joined ${club.name}, so leaving deletes the club and everything in it. Leave and delete it?`
+    : `Leave ${club.name}? Your name and ratings stay in the club's history. You'd need an invite link to come back.`;
+  if (!confirm(msg)) return;
+  if (alone) await removeClubFiles(club.id);
+  const { error } = await sb.rpc("leave_club", { c: club.id });
+  if (error) { toast(error.code === "P0001" ? error.message : "Couldn't leave the club. Try again."); return; }
+  location.href = location.pathname;
+}
+async function deleteAccount() {
+  if (!confirm("Delete your account? You leave all your clubs (your past ratings stay in each club's history) and your watchlist is deleted. A club nobody else has joined is deleted with it. This can't be undone.")) return;
+  // Clubs only you have joined go with your account; clear their images first.
+  const { data: mine } = await sb.from("members").select("club_id").eq("user_id", session.user.id);
+  for (const m of mine || []) {
+    const { count } = await sb.from("members").select("name", { count: "exact", head: true }).eq("club_id", m.club_id).not("user_id", "is", null);
+    if (count === 1) await removeClubFiles(m.club_id);
+  }
+  const { error } = await sb.rpc("delete_my_account");
+  if (error) { toast("Couldn't delete your account. Try again."); return; }
+  await signOut();
+}
+$("btn-signout").addEventListener("click", signOut);
+$("btn-leave").addEventListener("click", leaveClub);
+$("btn-delete-account").addEventListener("click", deleteAccount);
+$("btn-club-admin").addEventListener("click", () => { closeDialog($("settings")); openClubAdmin(); });
+
+/* ---------- dates ---------- */
+const isoDay = n => new Date(n * 864e5).toISOString().slice(0, 10);
+const addDays = (iso, n) => isoDay(dayNum(iso) + n);
+// The coming Friday (a week from today if today is Friday).
+const nextFriday = () => isoDay(today + ((5 - new Date(today * 864e5).getUTCDay() + 7) % 7 || 7));
+const datesFrom = (start, every, count) => Array.from({ length: every ? count : 1 }, (_, i) => addDays(start, i * every));
+const REPEATS = `<option value="7">Every week</option><option value="14">Every 2 weeks</option><option value="28">Every 4 weeks</option><option value="0">Just that date</option>`;
+const firstName = () => {
+  const m = session?.user?.user_metadata || {};
+  return (m.full_name || m.name || "").trim().split(/\s+/)[0].replace(/&/g, "").slice(0, 30);
+};
+const clubUrl = slug => `${location.pathname}?c=${encodeURIComponent(slug)}`;
+const rpcError = (error, fallback) => (error.code === "P0001" || error.code === "42501") ? error.message : fallback;
+
+/* ---------- home: sign in, your clubs, start or join a club ---------- */
+function showHome(html) {
+  club = null;
+  ["tabs", "status", "content", "turn"].forEach(id => { $(id).hidden = true; });
+  $("home").hidden = false;
+  $("home").innerHTML = html;
+  $("home-link").textContent = "Movie Club";
+  $("tagline").innerHTML = `<span>Take turns picking. Rate it together.</span>`;
+  $("footer-note").textContent = "Clubs are private: only their members can see them.";
+  renderAccount();
+}
+
+function renderSignedOut() {
+  const heading = JOIN_CODE ? "You've been invited to a movie club" : CLUB_SLUG ? "Sign in to see your club" : "A home for your movie club";
+  showHome(`
+    <div class="box pitch">
+      <h3>${heading}</h3>
+      <ul>
+        <li>Take turns picking the film, in an order everyone can see.</li>
+        <li>Rate and review what you watched, and vote on each other's takes.</li>
+        <li>Find your taste twin, and who always goes against the room.</li>
+      </ul>
+      <p>${JOIN_CODE ? "Sign in to see the club and join it." : "Free to use. Clubs are private: only their members can see them."}</p>
+      <div><button class="btn primary" type="button" id="home-signin">Sign in with Google</button></div>
+    </div>`);
+  $("home-signin").addEventListener("click", signIn);
+}
+
+async function renderMyClubs() {
+  showHome(`<div class="status"><strong>Loading your clubs…</strong></div>`);
+  const { data, error } = await sb.from("members").select("name, role, clubs(name, slug)").eq("user_id", session.user.id);
+  if (error) return showHome(`<div class="status"><strong>Couldn't load your clubs.</strong>Check your connection and try again.</div>`);
+  const list = (data || []).filter(m => m.clubs).sort((a, b) => a.clubs.name.localeCompare(b.clubs.name));
+  showHome(`
+    <div class="box">
+      <h3>Your clubs</h3>
+      ${list.length
+        ? `<ul class="club-list">${list.map(m => `<li><a href="${esc(clubUrl(m.clubs.slug))}"><span>${esc(m.clubs.name)}</span><small>You're ${esc(m.name)}${m.role === "admin" ? " · admin" : ""}</small></a></li>`).join("")}</ul>`
+        : `<p>You're not in a club yet. Start one below, or open an invite link a friend sent you.</p>`}
+    </div>
+    <form class="box" id="new-club" novalidate>
+      <h3>Start a club</h3>
+      <div class="field"><label for="nc-name">Club name</label><input id="nc-name" maxlength="60" autocomplete="off" placeholder="Friday Night Films"></div>
+      <div class="field"><label for="nc-me">Your name in the club</label><input id="nc-me" maxlength="30" autocomplete="off" value="${esc(firstName())}"><span class="help">Shown next to your ratings and picks.</span></div>
+      <div class="row2">
+        <div class="field"><label for="nc-date">First screening</label><input id="nc-date" type="date" value="${nextFriday()}"></div>
+        <div class="field"><label for="nc-repeat">Then</label><select id="nc-repeat">${REPEATS}</select></div>
+      </div>
+      <p class="help">You can invite people, set the pick order and add more dates once the club exists.</p>
+      <p class="form-error" id="nc-error" hidden></p>
+      <div><button class="btn primary" type="submit" id="nc-go">Create the club</button></div>
+    </form>
+    <p class="muted home-foot">Signed in as ${esc(session.user.email || "")} · <button class="link-btn" type="button" id="home-delete">Delete my account</button></p>`);
+  $("home-delete").addEventListener("click", deleteAccount);
+  $("new-club").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("nc-name").value.trim(), myName = $("nc-me").value.trim(), start = $("nc-date").value, every = +$("nc-repeat").value;
+    const fail = msg => { $("nc-error").textContent = msg; $("nc-error").hidden = false; };
+    if (!name) return fail("Give the club a name.");
+    if (!myName) return fail("Add your name in the club.");
+    if (myName.includes("&")) return fail("Names can't contain &.");
+    if (!start) return fail("Pick the date of the first screening.");
+    $("nc-go").disabled = true;
+    const { data: slug, error } = await sb.rpc("create_club", { club_name: name, my_name: myName });
+    if (error) { $("nc-go").disabled = false; return fail(rpcError(error, "Couldn't create the club. Try again in a moment.")); }
+    const { data: c } = await sb.from("clubs").select("id").eq("slug", slug).single();
+    if (c) await sb.rpc("admin_add_dates", { c: c.id, dates: datesFrom(start, every, 8) });
+    location.href = clubUrl(slug);
+  });
+}
+
+async function renderJoin() {
+  showHome(`<div class="status"><strong>Opening the invite…</strong></div>`);
+  const { data, error } = await sb.rpc("invite_preview", { code: JOIN_CODE });
+  const inv = data && data[0];
+  if (error || !inv) {
+    return showHome(`<div class="box"><h3>That invite link doesn't work</h3><p>The club may have made a new one. Ask someone in the club for the current link.</p><div><a class="btn" href="./">Go to your clubs</a></div></div>`);
+  }
+  if (inv.already_member) { location.replace(clubUrl(inv.slug)); return; }
+  const open = inv.open_names || [];
+  showHome(`
+    <form class="box" id="join" novalidate>
+      <span class="label">You're invited to</span>
+      <h3>${esc(inv.club_name)}</h3>
+      <p>${plural(inv.member_count, "member")} so far. Join to see the schedule, rate films and take your turn picking.</p>
+      ${open.length ? `
+        <fieldset class="claim">
+          <legend class="label">Which one are you?</legend>
+          ${open.map(n => `<label class="check"><input type="radio" name="who" value="${esc(n)}"> ${esc(n)}</label>`).join("")}
+          <label class="check"><input type="radio" name="who" value="" checked> Someone new</label>
+        </fieldset>
+        <p class="help">If the club already added your name, pick it so your past ratings stay with you.</p>` : ""}
+      <div class="field" id="join-new"><label for="join-name">Your name in the club</label><input id="join-name" maxlength="30" autocomplete="off" value="${esc(firstName())}"></div>
+      <p class="form-error" id="join-error" hidden></p>
+      <div><button class="btn primary" type="submit" id="join-go">Join the club</button></div>
+    </form>`);
+  const picked = () => document.querySelector('input[name="who"]:checked')?.value || "";
+  $("join").addEventListener("change", () => { $("join-new").hidden = !!picked(); });
+  $("join").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = picked() || $("join-name").value.trim();
+    const fail = msg => { $("join-error").textContent = msg; $("join-error").hidden = false; };
+    if (!name) return fail("Add your name in the club.");
+    if (name.includes("&")) return fail("Names can't contain &.");
+    $("join-go").disabled = true;
+    const { data: slug, error: err } = await sb.rpc("join_club", { code: JOIN_CODE, as_name: name });
+    if (err) { $("join-go").disabled = false; return fail(rpcError(err, "Couldn't join right now. Try again in a moment.")); }
+    location.href = clubUrl(slug);
+  });
+}
+
+/* ---------- club settings (admins) ---------- */
+let adm = { renaming: null, removing: null, invite: null };
+const adminOpen = () => $("club-admin").open;
+const inviteLink = code => `${location.origin}${location.pathname}?join=${code}`;
+function openClubAdmin() {
+  adm = { renaming: null, removing: null, invite: null };
+  renderClubAdmin();
+  openDialog($("club-admin"));
+  sb.rpc("admin_invite_code", { c: club.id }).then(({ data }) => { adm.invite = data; if (adminOpen()) renderClubAdmin(); });
+}
+// Run an admin function for this club, then refresh. Returns its result, or null if it failed.
+async function adminCall(fn, args, okMsg) {
+  const { data, error } = await sb.rpc(fn, { c: club.id, ...args });
+  if (error) { toast(rpcError(error, "That didn't save. Check your connection and try again.")); return null; }
+  if (okMsg) toast(typeof okMsg === "function" ? okMsg(data) : okMsg);
+  scheduleReload();
+  return data ?? true;
+}
+function applyClubName() {
+  document.title = `${club.name} · Movie Club`;
+  $("home-link").textContent = club.name;
+}
+
+function memberRow(m, order) {
+  const pos = order.indexOf(m.name), inRot = pos >= 0, nm = esc(m.name);
+  const btn = (act, label, cls = "", extra = "") => `<button class="btn small ${cls}" type="button" data-adm="${act}" data-name="${nm}"${extra}>${label}</button>`;
+  if (adm.renaming === m.name) {
+    return `<li><span class="n">${inRot ? pos + 1 : "G"}</span><input id="ca-rename" maxlength="30" value="${nm}" aria-label="New name for ${nm}">
+      <span class="acts">${btn("rename-save", "Save", "primary")}${btn("cancel", "Cancel")}</span></li>`;
+  }
+  if (adm.removing === m.name) {
+    return `<li><span class="n">${inRot ? pos + 1 : "G"}</span><span class="who">Remove ${nm}?<small>Keeping their ratings leaves their name in the club's history, unlinked from their account.</small></span>
+      <span class="acts">${btn("remove-keep", "Remove, keep ratings")}${btn("remove-all", "Remove with all their ratings", "danger")}${btn("cancel", "Cancel")}</span></li>`;
+  }
+  const tags = [m.name === me ? "you" : "", m.role === "admin" ? "admin" : "", !m.user_id ? "not joined yet" : "", inRot ? "" : "guest"].filter(Boolean).join(" · ");
+  return `<li>
+    <span class="n">${inRot ? pos + 1 : "G"}</span>
+    <span class="who">${nm}${tags ? `<small>${tags}</small>` : ""}</span>
+    <span class="acts">
+      ${inRot
+        ? btn("up", "↑", "", `${pos === 0 ? " disabled" : ""} aria-label="Move ${nm} earlier"`) + btn("down", "↓", "", `${pos === order.length - 1 ? " disabled" : ""} aria-label="Move ${nm} later"`) + btn("to-guest", "Make guest")
+        : btn("to-rot", "Add to pick order")}
+      ${btn("rename", "Rename")}
+      ${m.user_id && m.name !== me ? btn(m.role === "admin" ? "unadmin" : "admin", m.role === "admin" ? "Remove admin" : "Make admin") : ""}
+      ${m.name !== me ? btn("remove", "Remove", "danger") : ""}
+    </span>
+  </li>`;
+}
+
+function renderClubAdmin() {
+  if (!isAdmin()) { if (adminOpen()) closeDialog($("club-admin")); return; }
+  const body = $("club-admin-body");
+  // Keep anything half-typed through live refreshes.
+  const typed = {};
+  body.querySelectorAll("input[id]:not([readonly]), select[id]").forEach(el => { typed[el.id] = el.type === "checkbox" ? el.checked : el.value; });
+  const focusId = body.contains(document.activeElement) ? document.activeElement.id : null;
+
+  const order = pickOrder();
+  const rows = [...order.map(n => members.find(m => m.name === n)), ...members.filter(m => m.pick_order == null)];
+  const upcoming = slots.filter(x => !x.watched).sort((a, b) => a.date.localeCompare(b.date));
+  const last = slots.map(x => x.date).sort().pop();
+  body.className = "club-admin";
+  body.innerHTML = `
+    <section class="adm-section">
+      <span class="label">Club</span>
+      <div class="field"><label for="ca-name">Name</label><input id="ca-name" maxlength="60" value="${esc(club.name)}"></div>
+      <div class="field"><label for="ca-note">Schedule note</label><input id="ca-note" maxlength="200" value="${esc(club.schedule_note || "")}" placeholder="Fridays at 8, at Sam's"><span class="help">Shown at the top of the Schedule tab.</span></div>
+      <div><button class="btn small" type="button" data-adm="save-club">Save</button></div>
+    </section>
+    <section class="adm-section">
+      <span class="label">Invite link</span>
+      <p class="help">Anyone with this link can join once they sign in, so only send it to people you want in.</p>
+      <div class="custom-import"><input readonly id="ca-invite" value="${adm.invite ? esc(inviteLink(adm.invite)) : "Loading…"}" aria-label="Invite link"><button class="btn small primary" type="button" data-adm="copy-invite">Copy</button></div>
+      <div><button class="link-btn" type="button" data-adm="new-invite">Make a new link (the current one stops working)</button></div>
+    </section>
+    <section class="adm-section">
+      <span class="label">Members and pick order</span>
+      <p class="help">Picks go round in this order. Guests (G) rate films but don't pick. A name that's "not joined yet" can be claimed from the invite page.</p>
+      <ul class="adm-members">${rows.map(m => memberRow(m, order)).join("")}</ul>
+      <div class="inline-row">
+        <div class="field"><label for="ca-add">Add someone who hasn't joined</label><input id="ca-add" maxlength="30" autocomplete="off" placeholder="Their name"></div>
+        <label class="check"><input type="checkbox" id="ca-add-rot" checked> In the pick order</label>
+        <button class="btn small" type="button" data-adm="add-member">Add</button>
+      </div>
+    </section>
+    <section class="adm-section">
+      <span class="label">Screening dates</span>
+      <div class="inline-row">
+        <div class="field"><label for="ca-from">Starting</label><input id="ca-from" type="date" value="${last ? addDays(last, 7) : nextFriday()}"></div>
+        <div class="field"><label for="ca-every">Repeat</label><select id="ca-every">${REPEATS}</select></div>
+        <div class="field" style="flex:0 1 90px"><label for="ca-count">How many</label><input id="ca-count" type="number" min="1" max="52" value="8" inputmode="numeric"></div>
+        <button class="btn small" type="button" data-adm="add-dates">Add dates</button>
+      </div>
+      <p class="help">Each new date goes to the next person in the pick order. For two screenings a week, add each weekday separately.</p>
+      ${upcoming.length
+        ? `<ul class="adm-dates">${upcoming.map(x => `<li><span>${fmt(x.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · ${esc(x.picker)}${x.title ? ` · ${esc(x.title)}` : ""}</span><button class="link-btn" type="button" data-adm="remove-date" data-date="${x.date}">Remove</button></li>`).join("")}</ul>`
+        : `<p class="help">No upcoming dates on the calendar.</p>`}
+    </section>
+    <section class="adm-section">
+      <span class="label">Delete the club</span>
+      <p class="help">Deletes the club with every screening, rating, review and party image, for everyone. This can't be undone.</p>
+      <div><button class="btn small danger" type="button" data-adm="delete-club">Delete ${esc(club.name)}</button></div>
+    </section>`;
+  for (const [id, v] of Object.entries(typed)) {
+    const el = $(id); if (!el || id === "ca-rename") continue;
+    if (el.type === "checkbox") el.checked = v; else el.value = v;
+  }
+  if (focusId && $(focusId)) $(focusId).focus();
+}
+
+$("club-admin-form").addEventListener("submit", e => {
+  e.preventDefault();
+  // Enter in a box does what its section's button does.
+  const id = document.activeElement?.id;
+  const act = { "ca-name": "save-club", "ca-note": "save-club", "ca-add": "add-member", "ca-rename": "rename-save", "ca-count": "add-dates" }[id];
+  if (act) document.querySelector(`#club-admin-body [data-adm="${act}"]`)?.click();
+});
+$("club-admin-body").addEventListener("click", async e => {
+  const b = e.target.closest("[data-adm]"); if (!b || b.disabled) return;
+  const act = b.dataset.adm, name = b.dataset.name;
+  const order = pickOrder();
+  if (act === "save-club") {
+    const n = $("ca-name").value.trim(), note = $("ca-note").value.trim();
+    if (!n) return toast("The club needs a name.");
+    if (await adminCall("admin_update_club", { new_name: n, note }, "Club details saved")) {
+      club.name = n; club.schedule_note = note || null; applyClubName(); render();
+    }
+  } else if (act === "copy-invite") {
+    if (!adm.invite) return;
+    try { await navigator.clipboard.writeText(inviteLink(adm.invite)); toast("Invite link copied"); }
+    catch (err) { $("ca-invite").select(); toast("Select the link and copy it."); }
+  } else if (act === "new-invite") {
+    if (!confirm("Make a new invite link? The current link stops working, so anyone who hasn't joined yet will need the new one.")) return;
+    const code = await adminCall("admin_new_invite", {}, "New invite link made");
+    if (code) { adm.invite = code; renderClubAdmin(); }
+  } else if (act === "up" || act === "down") {
+    const i = order.indexOf(name), j = act === "up" ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const o = [...order]; [o[i], o[j]] = [o[j], o[i]];
+    adminCall("admin_set_order", { names: o });
+  } else if (act === "to-guest") {
+    adminCall("admin_set_order", { names: order.filter(n => n !== name) }, `${name} is now a guest`);
+  } else if (act === "to-rot") {
+    adminCall("admin_set_order", { names: [...order, name] }, `${name} is now last in the pick order`);
+  } else if (act === "rename") {
+    adm.renaming = name; adm.removing = null; renderClubAdmin(); $("ca-rename")?.select();
+  } else if (act === "rename-save") {
+    const n = $("ca-rename").value.trim();
+    if (!n || n.includes("&")) return toast("Names can't be empty or contain &.");
+    adm.renaming = null;
+    if (n === name) return renderClubAdmin();
+    if (!(await adminCall("admin_rename_member", { old_name: name, new_name: n }, `Renamed ${name} to ${n}`))) renderClubAdmin();
+  } else if (act === "cancel") {
+    adm.renaming = adm.removing = null; renderClubAdmin();
+  } else if (act === "admin" || act === "unadmin") {
+    adminCall("admin_set_role", { who: name, new_role: act === "admin" ? "admin" : "member" }, act === "admin" ? `${name} is now an admin` : `${name} is no longer an admin`);
+  } else if (act === "remove") {
+    adm.removing = name; adm.renaming = null; renderClubAdmin();
+  } else if (act === "remove-keep" || act === "remove-all") {
+    adm.removing = null;
+    adminCall("admin_remove_member", { who: name, keep_history: act === "remove-keep" }, `Removed ${name}`);
+  } else if (act === "add-member") {
+    const n = $("ca-add").value.trim();
+    if (!n || n.includes("&")) return toast("Type a name (without &).");
+    if (await adminCall("admin_add_member", { new_name: n, in_rotation: $("ca-add-rot").checked }, `Added ${n}. They can claim the name from the invite link.`)) $("ca-add").value = "";
+  } else if (act === "add-dates") {
+    const from = $("ca-from").value, every = +$("ca-every").value;
+    const count = Math.min(52, Math.max(1, Math.round(+$("ca-count").value) || 1));
+    if (!from) return toast("Pick the first date.");
+    adminCall("admin_add_dates", { dates: datesFrom(from, every, count) }, n => n ? `Added ${plural(n, "date")}` : "Those dates are already on the calendar");
+  } else if (act === "remove-date") {
+    const d = b.dataset.date, x = slots.find(y => y.date === d);
+    if (x?.title && !confirm(`${x.title} is set for ${fmt(d, { month: "long", day: "numeric" })}. Remove the date anyway?`)) return;
+    adminCall("admin_remove_date", { d }, "Date removed");
+  } else if (act === "delete-club") {
+    const typed = prompt(`This deletes ${club.name} for everyone. Type the club's name to confirm:`);
+    if (typed == null) return;
+    if (typed.trim() !== club.name) return toast("The name didn't match, so nothing was deleted.");
+    await removeClubFiles(club.id);
+    if (await adminCall("admin_delete_club", {}, null)) location.href = location.pathname;
+  }
+});
+
+/* ---------- open a club ---------- */
+async function refreshClub() {
+  const { data } = await sb.from("clubs").select("id, slug, name, schedule_note").eq("id", club.id).maybeSingle();
+  if (!data) { location.href = location.pathname; return; } // deleted, or you were removed
+  club = data; applyClubName(); render();
+}
+async function openClub() {
+  const { data, error } = await sb.from("clubs").select("id, slug, name, schedule_note").eq("slug", CLUB_SLUG).maybeSingle();
+  if (error) return showStatus("The club couldn't load.", "Check your connection and try again in a minute.");
+  if (!data) {
+    return showHome(`<div class="box"><h3>You're not in this club</h3><p>Clubs are private. To join, ask a member for the club's invite link.</p><div><a class="btn" href="./">Go to your clubs</a></div></div>`);
+  }
+  club = data;
+  applyClubName();
+  try { await load(); await loadWatchlist(); }
+  catch (e) { return showStatus("The club couldn't load.", "Check your connection and try again in a minute."); }
+  if (!me) return location.replace(location.pathname); // removed from the club meanwhile
+  render();
+  backfillPosters();
+  const filter = `club_id=eq.${club.id}`;
+  const ch = sb.channel(`club-${club.id}`);
+  ["members", "slots", "ratings", "absences", "stickers", "review_votes"].forEach(table =>
+    ch.on("postgres_changes", { event: "*", schema: "public", table, filter }, scheduleReload));
+  ch.on("postgres_changes", { event: "*", schema: "public", table: "clubs", filter: `id=eq.${club.id}` }, refreshClub);
+  ch.subscribe();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { scheduleReload(); refreshClub(); } });
+  window.addEventListener("hashchange", () => setTab(location.hash.slice(1)));
+}
+
+/* ---------- boot ---------- */
+(async () => {
+  if (!window.supabase || !CFG.supabaseUrl || CFG.supabaseUrl.startsWith("PASTE")) {
+    return showStatus("The database isn't connected yet.", "Add the Supabase project URL and key to config.js.");
+  }
+  sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { flowType: "pkce" } });
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  // Tidy the sign-in leftovers out of the address.
+  if (PARAMS.has("code") || PARAMS.has("error")) {
+    if (PARAMS.get("error_description")) toast(`Sign-in didn't finish: ${PARAMS.get("error_description")}`);
+    const q = new URLSearchParams(location.search);
+    ["code", "error", "error_code", "error_description"].forEach(k => q.delete(k));
+    try { history.replaceState(null, "", location.pathname + (q.size ? "?" + q : "") + location.hash); } catch (e) {}
+  }
+  sb.auth.onAuthStateChange((event, s) => {
+    if (event === "SIGNED_OUT") { location.href = location.pathname; return; }
+    session = s;
+  });
+  if (!session) return renderSignedOut();
+  if (JOIN_CODE) return renderJoin();
+  if (!CLUB_SLUG) return renderMyClubs();
+  await openClub();
+})();
+</script>
+</body>
+</html>

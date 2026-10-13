@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "movie-club-app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5191", "--bind", "127.0.0.1"],
+      "port": 5191
+    }
+  ]
+}
