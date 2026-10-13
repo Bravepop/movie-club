@@ -2228,7 +2228,8 @@ function unwatch(slot) {
 // Google sign-in. Comes back to this same address (club, invite or home).
 async function signIn() {
   const back = location.origin + location.pathname + location.search;
-  const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: back } });
+  // select_account: always ask which Google account, so people with several can pick the right one.
+  const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: back, queryParams: { prompt: "select_account" } } });
   if (error) toast("Couldn't start Google sign-in. Try again in a moment.");
 }
 
