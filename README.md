@@ -36,7 +36,7 @@ Optional: a free [TMDB](https://www.themoviedb.org/settings/api) API key in `con
 ### 4. Publish
 Push this folder to a GitHub repo and turn on **Settings → Pages** (deploy from the `main` branch, root folder).
 
-Also put a contact email in `privacy.html`.
+The privacy page lists `movieclub@bravepop.app` as the contact address (forwarded by Cloudflare Email Routing).
 
 ## Running it
 
