@@ -604,15 +604,6 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
 .acct-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .rcode { font-family: var(--font-mono); font-size: clamp(16px, 4.6vw, 22px); letter-spacing: .06em; text-align: center; padding: 14px 10px; border-radius: 8px; background: var(--bg); border: 1px dashed var(--accent); user-select: all; overflow-wrap: anywhere; }
 
-/* Setup checklist (admins of new clubs) */
-.setup { border-color: var(--accent); }
-.setup ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.setup li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.setup .tick { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); font-size: 13px; flex: none; }
-.setup li.done .tick { background: var(--good); border-color: var(--good); color: var(--bg); }
-.setup li.done .step { color: var(--muted); text-decoration: line-through; }
-.setup .box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-
 /* Club records */
 .records { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
 .record { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
@@ -682,7 +673,6 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
 
   <div id="content" hidden>
     <div class="panel" role="tabpanel" id="panel-next" aria-labelledby="tab-next">
-      <div class="box setup" id="setup" hidden></div>
       <section aria-labelledby="next-h">
         <div class="section-head"><h2 id="next-h">Next screening</h2></div>
         <article class="ticket" id="ticket"></article>
@@ -781,13 +771,6 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
     </div>
 
     <div class="panel" role="tabpanel" id="panel-critics" aria-labelledby="tab-critics" hidden>
-      <section aria-labelledby="rec-h" id="records-section" hidden>
-        <div class="section-head">
-          <h2 id="rec-h">Club records</h2>
-          <div class="seg" role="group" aria-label="Which year" id="records-year" hidden></div>
-        </div>
-        <ul class="records" id="records"></ul>
-      </section>
       <section aria-labelledby="mem-h">
         <div class="section-head">
           <h2 id="mem-h">The critics</h2>
@@ -805,6 +788,13 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
           </div>
         </div>
         <div class="members" id="members"></div>
+      </section>
+      <section aria-labelledby="rec-h" id="records-section" hidden>
+        <div class="section-head">
+          <h2 id="rec-h">Club records</h2>
+          <div class="seg" role="group" aria-label="Which year" id="records-year" hidden></div>
+        </div>
+        <ul class="records" id="records"></ul>
       </section>
     </div>
   </div>
@@ -1219,7 +1209,7 @@ function render() {
   }
   $("status").hidden = true; $("content").hidden = false;
   const D = derive();
-  renderTagline(D); renderSetup(D); renderTurn(D); renderTicket(D); renderTakes(D);
+  renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D);
   $("sched-note").textContent = club.schedule_note || "Picks rotate in the pick order below.";
   renderSchedule(D); renderWatchlist(); renderOrder(D); renderWatched(D); renderGrid(D); renderRecords(D); renderMembers(D);
   renderParty();
@@ -1709,31 +1699,6 @@ function renderMembers({ C, watched }) {
         ${c.latest ? `<blockquote>“${esc(c.latest.text)}”<cite>on ${esc(c.latest.f.title)}</cite></blockquote>` : ""}
       </article>`;
   }).join("");
-}
-
-/* ---------- setup checklist (admins of a new club) ---------- */
-function renderSetup({ upcoming, next }) {
-  const box = $("setup");
-  let hidden = false;
-  try { hidden = localStorage.getItem(`mc-setup-hidden-${club.id}`) === "1"; } catch (e) {}
-  if (!isAdmin() || hidden) { box.hidden = true; return; }
-  const open = upcoming.filter(s => !s.title);
-  const steps = [
-    { done: members.filter(m => m.user_id).length > 1, text: "Invite people", hint: "Copy the invite link from Club settings and send it to the group.", act: "setup-admin", btn: "Open Club settings" },
-    { done: pickOrder().length > 1, text: "Set the pick order", hint: "Put everyone in the order they'll take turns.", act: "setup-admin", btn: "Open Club settings" },
-    { done: pickOrder().length <= 1 || open.length <= 1 || new Set(open.map(s => s.picker)).size > 1, text: "Hand out the dates", hint: "Re-deal open dates so each date goes to the next person in the pick order.", act: "setup-admin", btn: "Open Club settings" },
-    { done: !!next?.title, text: "Add the first film", hint: "", act: "setup-edit", btn: "Add the film" }
-  ];
-  if (steps.every(x => x.done)) { box.hidden = true; return; }
-  box.hidden = false;
-  box.innerHTML = `
-    <div class="box-head"><h3>Get your club going</h3><button class="link-btn" type="button" data-act="setup-hide">Hide this</button></div>
-    <ol>${steps.map(x => `
-      <li class="${x.done ? "done" : ""}">
-        <span class="tick" aria-hidden="true">${x.done ? "✓" : ""}</span>
-        <span class="step">${x.text}${x.done ? " (done)" : ""}</span>
-        ${x.done ? "" : `${x.hint ? `<span class="muted" style="font-size:13px">${x.hint}</span>` : ""}<button class="btn small" type="button" data-act="${x.act}">${x.btn}</button>`}
-      </li>`).join("")}</ol>`;
 }
 
 /* ---------- club records ---------- */
@@ -2447,9 +2412,6 @@ document.addEventListener("click", e => {
   const act = b.dataset.act;
   if (act === "goto-tab") return setTab(b.dataset.id);
   if (act === "ics-mine") return downloadIcs(slots.filter(s => !s.watched && isPicker(s, me)).sort((a, b) => a.date.localeCompare(b.date)), "my-picks");
-  if (act === "setup-admin") return openClubAdmin();
-  if (act === "setup-edit") { const n = nextUp(); return n ? openEditor(n) : null; }
-  if (act === "setup-hide") { try { localStorage.setItem(`mc-setup-hidden-${club.id}`, "1"); } catch (err) {} return render(); }
   const slot = slots.find(s => s.date === b.dataset.id);
   if (!slot) return;
   if (act === "goto") return gotoFilm(slot.date);
