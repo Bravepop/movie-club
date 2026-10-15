@@ -2475,6 +2475,13 @@ const usernameAccount = () => !!session?.user?.email?.endsWith("@" + USER_DOMAIN
 const accountLabel = () => usernameAccount() ? session.user.email.split("@")[0] : session?.user?.email || "";
 const cleanUsername = u => u.trim().toLowerCase();
 const USERNAME_OK = /^[a-z0-9_]{3,20}$/;
+// Why a typed username won't work, in plain words (or "" if it's fine).
+const usernameProblem = u => !u ? "Enter your username."
+  : u.includes("@") ? "Use a Movie Club username here, not an email address. For a Google account, use Continue with Google above."
+  : /\s/.test(u) ? "Usernames can't have spaces."
+  : u.length < 3 || u.length > 20 ? "Usernames are 3–20 characters long."
+  : !USERNAME_OK.test(u) ? "Usernames only use letters, numbers and _."
+  : "";
 
 // Without a session, the sign-in options are on the home screen.
 function signIn() {
@@ -3010,7 +3017,7 @@ function wireAccountForms() {
   $("acct-form").addEventListener("submit", async e => {
     e.preventDefault();
     const user = cleanUsername($("a-user").value), pass = $("a-pass").value;
-    if (!USERNAME_OK.test(user)) return err("acct-error", mode === "in" ? "Enter your username." : "Usernames are 3–20 letters, numbers or _.");
+    if (usernameProblem(user)) return err("acct-error", usernameProblem(user));
     if (mode === "up" && pass.length < 8) return err("acct-error", "Use at least 8 characters for the password.");
     if (mode === "up" && pass !== $("a-again").value) return err("acct-error", "The two passwords don't match.");
     if (!pass) return err("acct-error", "Enter your password.");
@@ -3019,7 +3026,7 @@ function wireAccountForms() {
     if (mode === "in") {
       const { error } = await sb.auth.signInWithPassword({ email, password: pass });
       $("acct-go").disabled = false;
-      if (error) return err("acct-error", /invalid/i.test(error.message) ? "That username and password don't match." : "Couldn't sign in right now. Try again in a moment.");
+      if (error) return err("acct-error", /invalid/i.test(error.message) ? "That username and password don't match. New here? Choose Create account above." : "Couldn't sign in right now. Try again in a moment.");
       location.reload();
       return;
     }
@@ -3040,7 +3047,7 @@ function wireAccountForms() {
   $("reset-form").addEventListener("submit", async e => {
     e.preventDefault();
     const user = cleanUsername($("r-user").value), code = $("r-code").value.trim(), pass = $("r-pass").value;
-    if (!USERNAME_OK.test(user)) return err("reset-error", "Enter your username.");
+    if (usernameProblem(user)) return err("reset-error", usernameProblem(user));
     if (!code) return err("reset-error", "Enter your recovery code.");
     if (pass.length < 8) return err("reset-error", "Use at least 8 characters for the new password.");
     $("reset-go").disabled = true; err("reset-error", "");
