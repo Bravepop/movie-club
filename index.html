@@ -660,6 +660,12 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
 
   <div class="home" id="home" hidden></div>
 
+  <div class="turn" id="recovery-nudge" hidden>
+    <span class="label">Your account</span>
+    <span class="item">Make a recovery code, so you can set a new password yourself if you ever forget it.</span>
+    <button class="btn primary small" type="button" id="nudge-make">Make one</button>
+  </div>
+
   <div class="turn" id="turn" hidden></div>
 
   <nav class="tabs" role="tablist" aria-label="Sections" id="tabs">
@@ -2857,6 +2863,17 @@ $("recovery-form").addEventListener("submit", e => {
   const then = afterRecovery; afterRecovery = null;
   if (then) then();
 });
+// Username accounts brought over from the old JBOIZ site start without a recovery code.
+async function checkRecoveryCode() {
+  if (!usernameAccount()) return;
+  const { data, error } = await sb.rpc("has_recovery_code");
+  $("recovery-nudge").hidden = !!error || data === true;
+}
+$("nudge-make").addEventListener("click", async () => {
+  const { data, error } = await sb.rpc("make_recovery_code");
+  if (error) { toast("Couldn't make a code right now. Try again."); return; }
+  showRecoveryCode(data, () => { $("recovery-nudge").hidden = true; toast("Recovery code saved"); });
+});
 $("btn-new-recovery").addEventListener("click", async () => {
   if (!confirm("Make a new recovery code? Your current one stops working.")) return;
   const { data, error } = await sb.rpc("make_recovery_code");
@@ -3385,6 +3402,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
     session = s;
   });
   if (!session) return renderSignedOut();
+  checkRecoveryCode();
   if (JOIN_CODE) return renderJoin();
   if (!CLUB_SLUG) return renderMyClubs();
   await openClub();

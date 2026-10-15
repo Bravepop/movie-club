@@ -687,9 +687,15 @@ begin
 end;
 $$;
 
+-- Does the signed-in person have a recovery code yet?
+create function public.has_recovery_code() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from recovery_codes where user_id = auth.uid())
+$$;
+
 revoke execute on function public.new_recovery_code(), public.clean_recovery_code(text),
   public.make_recovery_code(), public.reset_password(text, text, text) from public, anon, authenticated;
-grant execute on function public.make_recovery_code() to authenticated;
+grant execute on function public.make_recovery_code(), public.has_recovery_code() to authenticated;
 grant execute on function public.reset_password(text, text, text) to anon, authenticated;
 
 /* ---------------------------------------------------------------- daily job */
