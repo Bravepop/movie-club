@@ -27,17 +27,21 @@
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EM%3C/text%3E%3C/svg%3E">
 <script>
   // Apply the saved palette before the page paints, so it never flashes the default.
+  // A saved custom palette is only used if it's readable (see paletteReadable below); otherwise the default shows.
   try {
     const p = localStorage.getItem("mc-palette");
-    if (p && p !== "charcoal") document.documentElement.dataset.palette = p.startsWith("custom") ? "custom" : p;
+    const lum = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const ok = b => !!b && ["bg", "surface", "fg", "accent", "display"].every(k => /^#[0-9a-f]{6}$/i.test(b[k] || "")) && ratio(b.fg, b.bg) >= 3 && ratio(b.fg, b.surface) >= 3;
     if (p && p.startsWith("custom")) {
       const list = JSON.parse(localStorage.getItem("mc-custom-palettes") || "null");
       const c = (list && list.find(x => "custom:" + x.id === p)) || JSON.parse(localStorage.getItem("mc-custom-palette") || "null");
-      if (c && c.vars) {
+      if (c && c.vars && ok(c.base)) {
+        document.documentElement.dataset.palette = "custom";
         for (const [k, v] of Object.entries(c.vars)) document.documentElement.style.setProperty("--" + k, v);
         document.documentElement.style.colorScheme = c.vars["color-scheme"] || "";
       }
-    }
+    } else if (p && p !== "charcoal") document.documentElement.dataset.palette = p;
   } catch (e) {}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2047,9 +2051,13 @@ function addPalette(name, base) {
   list.push(entry); savePalettes(list);
   return entry;
 }
+// A custom palette is only applied if every color is valid and text stays readable on it.
+// That way a broken or all-dark saved palette can't leave the page unreadable.
+const paletteReadable = b => !!b && CUSTOM_KEYS.every(k => /^#[0-9a-f]{6}$/i.test(b[k] || "")) && contrast(b.fg, b.bg) >= 3 && contrast(b.fg, b.surface) >= 3;
 function activeCustom() {
   const cur = currentPalette();
-  return cur.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === cur) || null : null;
+  const e = cur.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === cur) || null : null;
+  return e && paletteReadable(e.base) ? e : null;
 }
 function updateActive(patch) {
   const list = loadPalettes(), cur = activeCustom(); if (!cur) return null;
@@ -2084,7 +2092,8 @@ function currentPalette() {
   return p;
 }
 function applyPalette(id) {
-  const entry = id.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === id) : null;
+  let entry = id.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === id) : null;
+  if (entry && !paletteReadable(entry.base)) entry = null; // unreadable: show the default instead
   if (id.startsWith("custom:") && !entry) id = "charcoal";
   if (entry) {
     document.documentElement.dataset.palette = "custom";
